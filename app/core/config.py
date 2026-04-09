@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     PINECONE_INDEX_POP: str = "pops-nr"
 
     # Security
-    AGENTE_API_KEY: Optional[str] = "amorzito-secreta-123"  # Defina no .env para produção
+    AGENTE_API_KEY: Optional[str] = "amorzito_sk_7840650dca078a307f01caf7e5158002511a17a9815f16a8" 
     
     # Memory — PostgreSQL (Optional, falls back to in-memory if not set)
     DATABASE_URL: Optional[str] = None  # postgresql://user:password@host:5432/dbname
