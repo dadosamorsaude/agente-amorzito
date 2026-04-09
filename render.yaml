@@ -37,5 +37,5 @@ services:
         sync: false
       - key: LANGCHAIN_PROJECT
         value: ai-agent-amorzito
-      - key: API_KEY
+      - key: AGENTE_API_KEY
         sync: false # Set your secret key in Render Dashboard
