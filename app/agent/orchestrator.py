@@ -27,12 +27,25 @@ def _detect_rag(message: str) -> bool:
     return any(k in msg_lower for k in RAG_KEYWORDS)
 
 def _build_system_prompt(dates: dict, rag_required: bool) -> str:
-    """Builds the system prompt with dynamic date and RAG flag injection."""
+    """Builds the system prompt with dynamic date, RAG flag, and SQL schema injection."""
     return f"""You are AMORZITO, a medical record analysis assistant.
 Always respond in Brazilian Portuguese.
+
 ## Objective
 - Analyze medical records and quality/compliance indicators.
 - Use RAG tools only when ragRequired = {rag_required}.
+
+## Database Schema (AWS Athena)
+When querying medical records, use the following information:
+- **Table**: `pdgt_amorsaude_inteligencia.tb_qualidade_prontuarios`
+- **Allowed Columns**: id_agendamento, id_atendimento, data_atendimento, status_agendamento, id_procedimento, id_especialidade, especialidade, anamnese, conduta, hipotese_diagnostica, observacao, orientacao, solicitacao, especialidade_destino, cid_codigo, cid_descricao_detalhada, id_clinica, clinica, regional, uf, id_profissional, nome_profissional, prontuario_assinado.
+
+## SQL Rules
+- NEVER use `SELECT *`. List columns explicitly.
+- Always filter by `data_atendimento` using the reference dates below.
+- Limit detailed results to 20 rows.
+- Use aggregations (COUNT, SUM, AVG) whenever possible for statistics.
+
 ## Date Reference
 Today: {dates['hoje']}
 Yesterday: {dates['ontem']}
