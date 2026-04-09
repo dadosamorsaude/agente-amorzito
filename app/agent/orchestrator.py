@@ -66,6 +66,12 @@ async def run_agent(user_id: str, message: str, stream: bool = False):
             full_response = ""
             async for event in agent.astream_events({"messages": messages}, version="v2"):
                 kind = event["event"]
+                
+                # Signal that a tool is being called to keep the connection alive
+                if kind == "on_tool_start":
+                    tool_name = event["name"]
+                    yield f"🔍 [Executando ferramenta: {tool_name}...]\n"
+                
                 if kind == "on_chat_model_stream":
                     content = event["data"]["chunk"].content
                     if content:

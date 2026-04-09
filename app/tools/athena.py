@@ -1,3 +1,4 @@
+import asyncio
 from pyathena import connect
 from app.core.config import settings
 from langchain_core.tools import tool
@@ -18,8 +19,37 @@ def validate_sql(sql: str) -> None:
         raise ValueError("SELECT * não é permitido. Por favor, liste as colunas explicitamente.")
 
 
+def _execute_athena_query(sql: str):
+    """Internal synchronous function to execute the query."""
+    conn = None
+    cursor = None
+    try:
+        conn = connect(
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+            region_name=settings.aws_region_clean,
+            s3_staging_dir=settings.ATHENA_S3_STAGING_DIR,
+            schema_name=settings.ATHENA_DATABASE,
+        )
+
+        cursor = conn.cursor()
+        cursor.execute(sql)
+
+        columns = [desc[0] for desc in cursor.description]
+        rows = cursor.fetchmany(20)
+
+        results = [dict(zip(columns, row)) for row in rows]
+        return results
+
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+
 @tool
-def query_athena_tool(sql: str) -> str:
+async def query_athena_tool(sql: str) -> str:
     """
     Executa consultas SQL no AWS Athena para análise de prontuários médicos.
     A query deve ser compatível com Presto/Athena.
@@ -32,26 +62,11 @@ def query_athena_tool(sql: str) -> str:
         logger.warning(f"SQL inválido rejeitado: {e}")
         return f"Consulta inválida: {str(e)}"
 
-    logger.info(f"Ferramenta Athena executando: {sql}")
+    logger.info(f"Ferramenta Athena executando (async): {sql}")
 
-    conn = None
-    cursor = None
     try:
-        conn = connect(
-            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-            region_name=settings.aws_region_clean,
-            s3_staging_dir=settings.ATHENA_S3_STAGING_DIR,  # s3://bucket/path/
-            schema_name=settings.ATHENA_DATABASE,            # database/schema name
-        )
-
-        cursor = conn.cursor()
-        cursor.execute(sql)
-
-        columns = [desc[0] for desc in cursor.description]
-        rows = cursor.fetchmany(20)  # Defense in depth: cap at 20 rows at driver level
-
-        results = [dict(zip(columns, row)) for row in rows]
+        # Executa a query síncrona em uma thread separada para não bloquear o loop de eventos
+        results = await asyncio.to_thread(_execute_athena_query, sql)
 
         if not results:
             logger.info("Ferramenta Athena: Nenhum resultado encontrado.")
@@ -62,9 +77,4 @@ def query_athena_tool(sql: str) -> str:
 
     except Exception as e:
         logger.exception("Erro na ferramenta Athena")
-        return f"Erro ao executar consulta: {str(e)}"
-    finally:
-        if cursor is not None:
-            cursor.close()
-        if conn is not None:
-            conn.close()
+        return f"Erro ao acessar o banco de dados Athena: {str(e)}. Verifique se as credenciais e o nome do banco estão corretos."
