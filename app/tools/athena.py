@@ -1,0 +1,70 @@
+from pyathena import connect
+from app.core.config import settings
+from langchain_core.tools import tool
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def validate_sql(sql: str) -> None:
+    """Validates SQL to allow only read-only SELECT queries."""
+    sql_upper = sql.upper()
+    forbidden = ["INSERT ", "UPDATE ", "DELETE ", "DROP ", "ALTER ", "TRUNCATE "]
+    if any(token in sql_upper for token in forbidden):
+        logger.error(f"Operação proibida detectada no SQL: {sql}")
+        raise ValueError("SQL contém operação proibida. Apenas SELECT é permitido.")
+
+    if "SELECT *" in sql_upper:
+        raise ValueError("SELECT * não é permitido. Por favor, liste as colunas explicitamente.")
+
+
+@tool
+def query_athena_tool(sql: str) -> str:
+    """
+    Executa consultas SQL no AWS Athena para análise de prontuários médicos.
+    A query deve ser compatível com Presto/Athena.
+    Retorne apenas dados relevantes. Limite sempre a 20 linhas.
+    """
+    # Validate SQL before execution
+    try:
+        validate_sql(sql)
+    except ValueError as e:
+        logger.warning(f"SQL inválido rejeitado: {e}")
+        return f"Consulta inválida: {str(e)}"
+
+    logger.info(f"Ferramenta Athena executando: {sql}")
+
+    conn = None
+    cursor = None
+    try:
+        conn = connect(
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+            region_name=settings.aws_region_clean,
+            s3_staging_dir=settings.ATHENA_S3_STAGING_DIR,  # s3://bucket/path/
+            schema_name=settings.ATHENA_DATABASE,            # database/schema name
+        )
+
+        cursor = conn.cursor()
+        cursor.execute(sql)
+
+        columns = [desc[0] for desc in cursor.description]
+        rows = cursor.fetchmany(20)  # Defense in depth: cap at 20 rows at driver level
+
+        results = [dict(zip(columns, row)) for row in rows]
+
+        if not results:
+            logger.info("Ferramenta Athena: Nenhum resultado encontrado.")
+            return "Nenhum resultado encontrado para esta consulta."
+
+        logger.info(f"Ferramenta Athena: Retornadas {len(results)} linhas com sucesso.")
+        return str(results)
+
+    except Exception as e:
+        logger.exception("Erro na ferramenta Athena")
+        return f"Erro ao executar consulta: {str(e)}"
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
