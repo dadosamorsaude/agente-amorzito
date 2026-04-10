@@ -5,7 +5,7 @@ from typing import Optional
 class Settings(BaseSettings):
     # LLM Settings
     OPENAI_API_KEY: str
-    MODEL_NAME: str = "gpt-4o"
+    MODEL_NAME: str = "gpt-5.1"
     TEMPERATURE: float = 0.0
 
     # AWS / Athena Settings
