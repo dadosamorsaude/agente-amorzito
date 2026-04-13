@@ -13,27 +13,22 @@ from app.utils.dates import get_dates
 
 logger = logging.getLogger(__name__)
 
-# ── RAG detection keywords ──────────────────────────────────────────────────
-RAG_KEYWORDS = [
-    "qualidade", "prontuário", "avaliar", "avaliação", "cfm", "conformidade",
-    "anamnese", "resolução", "conduta", "hipótese diagnóstica", "documentação",
-    "registro clínico", "boas práticas", "conforme", "conformes", "pop",
-    "criar pop", "produzir pop", "elabore um pop", "pops",
-]
+# ── Prompt Builder ──────────────────────────────────────────────────────────
 
-def _detect_rag(message: str) -> bool:
-    """Returns True if the message requires RAG tools (CFM / POP)."""
-    msg_lower = message.lower()
-    return any(k in msg_lower for k in RAG_KEYWORDS)
-
-def _build_system_prompt(dates: dict, rag_required: bool) -> str:
-    """Builds the system prompt with dynamic date, RAG flag, and SQL schema injection."""
+def _build_system_prompt(dates: dict) -> str:
+    """Builds the system prompt with dynamic date and clear tool instructions."""
     return f"""You are AMORZITO, a medical record analysis assistant.
 Always respond in Brazilian Portuguese.
 
 ## Objective
 - Analyze medical records and quality/compliance indicators.
-- Use RAG tools only when ragRequired = {rag_required}.
+- Provide insights based on clinical data and official regulations.
+
+## Guidelines for Quality & Compliance (RAG)
+To ensure your responses are based on official evidence and protocols:
+1. **CFM & Regulations**: For any questions regarding CFM (Conselho Federal de Medicina) guidelines, medical ethics, record-keeping standards (anamnese, conduta, etc.), and quality criteria, you MUST use the `search_medical_compliance_tool`.
+2. **Standard Operating Procedures (POP)**: For questions about operational workflows, internal protocols, or creating/reviewing POPs, you MUST use the `search_sop_tool`.
+3. **Internal Data**: Use `query_athena_tool` for patient data and specific medical records stored in the database.
 
 ## Database Schema (AWS Athena)
 When querying medical records, use the following information:
@@ -61,23 +56,27 @@ async def run_agent(user_id: str, message: str, stream: bool = False):
         yield "Por favor, digite uma mensagem."
         return
 
-    rag_required = _detect_rag(message)
     llm = get_chat_model()
     tools = [query_athena_tool, search_medical_compliance_tool, search_sop_tool]
     dates = get_dates()
-    system_prompt = _build_system_prompt(dates, rag_required)
+    system_prompt = _build_system_prompt(dates)
     
     history = get_session_history(user_id)
-    messages = [SystemMessage(content=system_prompt)]
-    messages.extend(history.messages)
-    messages.append(HumanMessage(content=message))
-
+    # We pass the history to the agent. create_react_agent will handle the system prompt if we pass it.
+    # To avoid duplication, we pass history and let the agent be initialized with the prompt.
+    
     try:
+        # Initializing the agent with the current system prompt
         agent = create_react_agent(model=llm, tools=tools, prompt=system_prompt)
+
+        # Prepare messages: history + new message
+        # create_react_agent usually expects the full message list.
+        # If we passed 'prompt' to create_react_agent, it will prepend it as a SystemMessage.
+        input_messages = list(history.messages) + [HumanMessage(content=message)]
 
         if stream:
             full_response = ""
-            async for event in agent.astream_events({"messages": messages}, version="v2"):
+            async for event in agent.astream_events({"messages": input_messages}, version="v2"):
                 kind = event["event"]
                 
                 # Signal that a tool is being called to keep the connection alive
@@ -96,7 +95,7 @@ async def run_agent(user_id: str, message: str, stream: bool = False):
             history.add_ai_message(full_response)
         else:
             # For non-streaming, we still yield the result as a single chunk
-            result = await agent.ainvoke({"messages": messages})
+            result = await agent.ainvoke({"messages": input_messages})
             response_text = result["messages"][-1].content
             
             # Response validation
