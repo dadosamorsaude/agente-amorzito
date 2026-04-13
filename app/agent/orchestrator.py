@@ -6,7 +6,7 @@ from langgraph.prebuilt import create_react_agent
 
 from app.services.llm import get_chat_model
 from app.tools.athena import query_athena_tool
-from app.services.rag import search_medical_compliance_tool, search_sop_tool
+from app.tools.rag import search_medical_compliance_tool, search_sop_tool
 from app.services.memory import get_session_history
 from app.services.validator import validate_response
 from app.utils.dates import get_dates
@@ -70,13 +70,17 @@ async def run_agent(user_id: str, message: str, stream: bool = False):
         agent = create_react_agent(model=llm, tools=tools, prompt=system_prompt)
 
         # Prepare messages: history + new message
-        # create_react_agent usually expects the full message list.
-        # If we passed 'prompt' to create_react_agent, it will prepend it as a SystemMessage.
         input_messages = list(history.messages) + [HumanMessage(content=message)]
+        
+        # Configuration for LangSmith and LangGraph (improves trace visibility)
+        config = {
+            "configurable": {"thread_id": user_id},
+            "run_name": "Agente Amorzito"
+        }
 
         if stream:
             full_response = ""
-            async for event in agent.astream_events({"messages": input_messages}, version="v2"):
+            async for event in agent.astream_events({"messages": input_messages}, config=config, version="v2"):
                 kind = event["event"]
                 
                 # Signal that a tool is being called to keep the connection alive
@@ -95,7 +99,7 @@ async def run_agent(user_id: str, message: str, stream: bool = False):
             history.add_ai_message(full_response)
         else:
             # For non-streaming, we still yield the result as a single chunk
-            result = await agent.ainvoke({"messages": input_messages})
+            result = await agent.ainvoke({"messages": input_messages}, config=config)
             response_text = result["messages"][-1].content
             
             # Response validation
