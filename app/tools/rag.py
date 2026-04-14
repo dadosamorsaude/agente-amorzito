@@ -11,20 +11,25 @@ def get_retriever(index_name: str):
     if not settings.PINECONE_API_KEY:
         return None
 
-    # O índice no Pinecone foi criado com dimensão 1024.
-    # O modelo padrão do Langchain usa 1536, então precisamos forçar o uso da v3 com dimensions=1024.
+    # 🔹 embeddings
     embeddings = OpenAIEmbeddings(
         api_key=settings.OPENAI_API_KEY,
-        model="text-embedding-3-small",
-        dimensions=1024
+        model="text-embedding-3-small"
     )
+
+    # 🔹 cliente Pinecone (OBRIGATÓRIO na versão nova)
+    pc = Pinecone(api_key=settings.PINECONE_API_KEY)
+
+    index = pc.Index(index_name)
+
+    # 🔹 vector store
     vectorstore = PineconeVectorStore(
-        index_name=index_name,
-        embedding=embeddings,
-        pinecone_api_key=settings.PINECONE_API_KEY
+        index=index,
+        embedding=embeddings
     )
-    
-    return vectorstore.as_retriever(search_kwargs={"k": 3})
+
+    return vectorstore.as_retriever(search_kwargs={"k": 5})
+
 
 def get_cfm_retriever():
     return get_retriever(settings.PINECONE_INDEX_CFM)

@@ -1,5 +1,6 @@
 from langchain_core.prompts import ChatPromptTemplate
-from app.services.llm import get_chat_model
+from app.services.llm import get_chat_model_openai
+from app.services.llm import get_chat_model_claude
 from app.services.schemas import DecisionOutput
 
 
@@ -14,7 +15,7 @@ Classifique a mensagem do usuário em exatamente uma das ações:
 
 
 def decide_action(message: str) -> dict:
-    llm = get_chat_model(temperature=0.0)
+    llm = get_chat_model_claude(temperature=0.0)
     structured_llm = llm.with_structured_output(DecisionOutput)
 
     prompt = ChatPromptTemplate.from_messages(

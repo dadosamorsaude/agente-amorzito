@@ -24,4 +24,5 @@ dependencies = [
     "langsmith>=0.7.26",
     "langchain-postgres>=0.0.17",
     "pinecone>=7.3.0",
+    "langchain-anthropic>=1.4.0",
 ]

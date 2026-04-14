@@ -1,5 +1,6 @@
 from langchain_core.prompts import ChatPromptTemplate
-from app.services.llm import get_chat_model
+from app.services.llm import get_chat_model_openai
+from app.services.llm import get_chat_model_claude
 
 
 ANALYSIS_SYSTEM_PROMPT = """
@@ -19,7 +20,7 @@ Se não houver dados suficientes, diga isso claramente.
 
 
 def analyze_data(message: str, data) -> str:
-    llm = get_chat_model(temperature=0.2)
+    llm = get_chat_model_claude(temperature=0.2)
 
     prompt = ChatPromptTemplate.from_messages(
         [
