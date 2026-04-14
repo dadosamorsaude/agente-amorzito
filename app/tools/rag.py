@@ -14,7 +14,8 @@ def get_retriever(index_name: str):
     # 🔹 embeddings
     embeddings = OpenAIEmbeddings(
         api_key=settings.OPENAI_API_KEY,
-        model="text-embedding-3-small"
+        model="text-embedding-3-small",
+        dimensions=1024
     )
 
     # 🔹 cliente Pinecone (OBRIGATÓRIO na versão nova)
