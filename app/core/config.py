@@ -8,6 +8,11 @@ class Settings(BaseSettings):
     MODEL_NAME: str = "gpt-5.4"
     TEMPERATURE: float = 0.0
 
+    ANTHROPIC_API_KEY: str
+    MODEL_CLAUDE: str =  "claude-sonnet-4-6"
+    TEMPERATURE_CLAUDE: float = 0.4
+
+
     # AWS / Athena Settings
     AWS_ACCESS_KEY_ID: str
     AWS_SECRET_ACCESS_KEY: str
@@ -21,7 +26,7 @@ class Settings(BaseSettings):
     PINECONE_INDEX_POP: str = "pops-nr"
 
     # Security
-    AGENTE_API_KEY: Optional[str] = "amorzito_sk_7840650dca078a307f01caf7e5158002511a17a9815f16a8" 
+    AGENTE_API_KEY: str
     
     # Memory — PostgreSQL (Optional, falls back to in-memory if not set)
     DATABASE_URL: Optional[str] = None  # postgresql://user:password@host:5432/dbname

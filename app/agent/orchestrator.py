@@ -4,7 +4,8 @@ import logging
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage
 from langgraph.prebuilt import create_react_agent
 
-from app.services.llm import get_chat_model
+from app.services.llm import get_chat_model_openai
+from app.services.llm import get_chat_model_claude
 from app.tools.athena import query_athena_tool
 from app.tools.rag import search_medical_compliance_tool, search_sop_tool
 from app.services.memory import get_session_history
@@ -56,7 +57,7 @@ async def run_agent(user_id: str, message: str, stream: bool = False):
         yield "Por favor, digite uma mensagem."
         return
 
-    llm = get_chat_model()
+    llm = get_chat_model_claude()
     tools = [query_athena_tool, search_medical_compliance_tool, search_sop_tool]
     dates = get_dates()
     system_prompt = _build_system_prompt(dates)
