@@ -1,10 +1,8 @@
 import asyncio
 import logging
 from typing import Any
-
 from langchain_core.messages import HumanMessage
 from langgraph.prebuilt import create_react_agent
-
 from app.services.llm import get_chat_model_claude
 from app.tools.athena import query_athena_tool
 from app.tools.rag import search_medical_compliance_tool, search_sop_tool
@@ -47,10 +45,10 @@ Yesterday: {dates['ontem']}
 """
 
 
-def normalize_content(content: Any) -> str:
+def extract_text_from_content(content: Any) -> str:
     """
-    Normalizes LangChain/LangGraph model content into plain text.
-    Handles strings, lists of content blocks, dicts, and fallback values.
+    Extracts only user-facing text from LangChain/LangGraph/Anthropic content blocks.
+    Ignores tool_use, input_json_delta, and any non-text structured content.
     """
     if content is None:
         return ""
@@ -64,31 +62,35 @@ def normalize_content(content: Any) -> str:
         for item in content:
             if isinstance(item, str):
                 parts.append(item)
-            elif isinstance(item, dict):
-                if item.get("type") == "text":
-                    parts.append(str(item.get("text", "")))
-                else:
-                    parts.append(str(item))
-            else:
-                # Handles objects like content blocks or other types
-                text_attr = getattr(item, "text", None)
-                if text_attr is not None:
-                    parts.append(str(text_attr))
-                else:
-                    parts.append(str(item))
+                continue
+
+            if isinstance(item, dict):
+                block_type = item.get("type")
+                if block_type == "text":
+                    text = item.get("text", "")
+                    if text:
+                        parts.append(str(text))
+                # ignora tool_use, input_json_delta e outros blocos
+                continue
+
+            item_type = getattr(item, "type", None)
+            if item_type == "text":
+                text = getattr(item, "text", "")
+                if text:
+                    parts.append(str(text))
 
         return "".join(parts)
 
     if isinstance(content, dict):
         if content.get("type") == "text":
             return str(content.get("text", ""))
-        return str(content)
+        return ""
 
-    text_attr = getattr(content, "text", None)
-    if text_attr is not None:
-        return str(text_attr)
+    content_type = getattr(content, "type", None)
+    if content_type == "text":
+        return str(getattr(content, "text", ""))
 
-    return str(content)
+    return ""
 
 
 async def run_agent(user_id: str, message: str, stream: bool = False):
@@ -120,7 +122,9 @@ async def run_agent(user_id: str, message: str, stream: bool = False):
             prompt=system_prompt,
         )
 
-        input_messages = list(history.messages) + [HumanMessage(content=message)]
+        # Limita o contexto às últimas 10 conversas para economizar tokens lidos pelo LLM
+        recent_messages = list(history.messages)[-10:]
+        input_messages = recent_messages + [HumanMessage(content=message)]
 
         config = {
             "configurable": {"thread_id": user_id},
@@ -140,7 +144,7 @@ async def run_agent(user_id: str, message: str, stream: bool = False):
 
                     if kind == "on_tool_start":
                         tool_name = event.get("name", "ferramenta")
-                        yield f"🔍 [Executando ferramenta: {tool_name}...]\n"
+                        logger.info(f"Executando ferramenta: {tool_name}")
                         continue
 
                     if kind == "on_chat_model_stream":
@@ -148,13 +152,15 @@ async def run_agent(user_id: str, message: str, stream: bool = False):
                         if not chunk:
                             continue
 
-                        text = normalize_content(getattr(chunk, "content", None))
+                        text = extract_text_from_content(getattr(chunk, "content", None))
                         if text:
                             full_response += text
                             yield text
 
+                final_response = validate_response(full_response).output if full_response else ""
+
                 history.add_user_message(message)
-                history.add_ai_message(full_response)
+                history.add_ai_message(final_response)
 
             except asyncio.CancelledError:
                 logger.warning("Streaming cancelado pelo cliente.")
@@ -167,7 +173,7 @@ async def run_agent(user_id: str, message: str, stream: bool = False):
             if not messages:
                 final_response = "Não foi possível gerar uma resposta."
             else:
-                response_text = normalize_content(messages[-1].content)
+                response_text = extract_text_from_content(messages[-1].content)
                 validation = validate_response(response_text)
                 final_response = validation.output
 

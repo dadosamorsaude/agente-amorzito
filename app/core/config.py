@@ -22,11 +22,13 @@ class Settings(BaseSettings):
 
     # Pinecone Settings
     PINECONE_API_KEY: Optional[str] = None
-    PINECONE_INDEX_CFM: str = "qualidade-conformidade"
-    PINECONE_INDEX_POP: str = "pops-nr"
+    PINECONE_INDEX_CFM: str
+    PINECONE_INDEX_POP: str
+    PINECONE_INDEX_CACHE: str
 
     # Security
     AGENTE_API_KEY: str
+    ALLOWED_ORIGINS: str
     
     # Memory — PostgreSQL (Optional, falls back to in-memory if not set)
     DATABASE_URL: Optional[str] = None  # postgresql://user:password@host:5432/dbname
