@@ -15,9 +15,15 @@ app = FastAPI(
     description="Agente de análise de prontuários médicos.",
 )
 
+from app.core.config import settings
+
+# Parse de domínios permitidos via variável de ambiente (separados por vírgula)
+allowed_origins = [origin.strip() for origin in settings.ALLOWED_ORIGINS.split(",") if origin.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Restrict to specific origins in production
+    allow_origins=allowed_origins,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )

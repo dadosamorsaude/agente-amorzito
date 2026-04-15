@@ -1,6 +1,7 @@
 # Environments
 .env
 .env.*
+create_pinecone_index.py
 
 # Python-generated files
 __pycache__/
