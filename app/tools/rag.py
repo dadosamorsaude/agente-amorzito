@@ -1,8 +1,13 @@
+from contextvars import ContextVar
 from pinecone import Pinecone
 from langchain_pinecone import PineconeVectorStore
 from langchain_openai import OpenAIEmbeddings
 from langchain_core.tools import tool
 from app.core.config import settings
+
+# Contexto por-task que armazena os trechos recuperados pelo RAG.
+# Captura tanto CFM quanto POPs para uso pelo Agente Avaliador.
+rag_results_context: ContextVar[list] = ContextVar("rag_results", default=[])
 
 def get_retriever(index_name: str):
     """
@@ -48,6 +53,15 @@ def search_medical_compliance_tool(query: str) -> str:
     retriever = get_cfm_retriever()
     if not retriever: return "Erro ao configurar buscador CFM."
     docs = retriever.invoke(query)
+    
+    # Captura os trechos recuperados no contexto para o Agente Avaliador
+    captured = rag_results_context.get([])
+    rag_results_context.set(captured + [{
+        "source": "CFM",
+        "query": query,
+        "chunks": [d.page_content for d in docs]
+    }])
+    
     return "\n\n".join([d.page_content for d in docs]) if docs else "Nenhuma diretriz encontrada."
 
 @tool
@@ -59,4 +73,13 @@ def search_sop_tool(query: str) -> str:
     retriever = get_pop_retriever()
     if not retriever: return "Erro ao configurar buscador de POPs."
     docs = retriever.invoke(query)
+
+    # Captura os trechos recuperados no contexto para o Agente Avaliador
+    captured = rag_results_context.get([])
+    rag_results_context.set(captured + [{
+        "source": "POP",
+        "query": query,
+        "chunks": [d.page_content for d in docs]
+    }])
+
     return "\n\n".join([d.page_content for d in docs]) if docs else "Nenhum POP encontrado."

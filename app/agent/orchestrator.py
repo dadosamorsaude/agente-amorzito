@@ -4,11 +4,13 @@ from typing import Any
 from langchain_core.messages import HumanMessage
 from langgraph.prebuilt import create_react_agent
 from app.services.llm import get_chat_model_claude
-from app.tools.athena import query_athena_tool
-from app.tools.rag import search_medical_compliance_tool, search_sop_tool
+from app.tools.athena import query_athena_tool, athena_results_context
+from app.tools.rag import search_medical_compliance_tool, search_sop_tool, rag_results_context
 from app.services.memory import get_session_history
 from app.services.validator import validate_response
 from app.utils.dates import get_dates
+from app.agent.evaluator import evaluate_response
+from app.services.evaluation_store import save_evaluation
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +95,25 @@ def extract_text_from_content(content: Any) -> str:
     return ""
 
 
+async def _run_evaluation_background(
+    user_id: str,
+    message: str,
+    final_response: str,
+    raw_data: list,
+    rag_data: list,
+) -> None:
+    """Executa a avaliação em background sem bloquear a resposta ao usuário."""
+    try:
+        logger.info(
+            f"Avaliador iniciado em background | user_id={user_id} "
+            f"| queries_athena={len(raw_data)} | queries_rag={len(rag_data)}"
+        )
+        evaluation = await evaluate_response(message, final_response, raw_data, rag_data)
+        await save_evaluation(user_id, message, final_response, raw_data, evaluation)
+    except Exception:
+        logger.exception("Erro no pipeline de avaliação em background")
+
+
 async def run_agent(user_id: str, message: str, stream: bool = False):
     """
     Main agent entrypoint.
@@ -104,6 +125,10 @@ async def run_agent(user_id: str, message: str, stream: bool = False):
     if not message or not message.strip():
         yield "Por favor, digite uma mensagem."
         return
+
+    # Zera os contextos de captura para esta execução
+    athena_results_context.set([])
+    rag_results_context.set([])
 
     llm = get_chat_model_claude()
     tools = [
@@ -162,6 +187,14 @@ async def run_agent(user_id: str, message: str, stream: bool = False):
                 history.add_user_message(message)
                 history.add_ai_message(final_response)
 
+                # Dispara avaliação em background (sem bloquear o stream)
+                raw_data = athena_results_context.get([])
+                rag_data = rag_results_context.get([])
+                if (raw_data or rag_data) and final_response:
+                    asyncio.create_task(
+                        _run_evaluation_background(user_id, message, final_response, raw_data, rag_data)
+                    )
+
             except asyncio.CancelledError:
                 logger.warning("Streaming cancelado pelo cliente.")
                 return
@@ -179,6 +212,14 @@ async def run_agent(user_id: str, message: str, stream: bool = False):
 
             history.add_user_message(message)
             history.add_ai_message(final_response)
+
+            # Dispara avaliação em background (sem bloquear a resposta)
+            raw_data = athena_results_context.get([])
+            rag_data = rag_results_context.get([])
+            if (raw_data or rag_data) and final_response:
+                asyncio.create_task(
+                    _run_evaluation_background(user_id, message, final_response, raw_data, rag_data)
+                )
 
             yield final_response
 
