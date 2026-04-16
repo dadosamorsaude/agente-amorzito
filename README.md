@@ -14,7 +14,7 @@ Agente de IA especializado em análise de prontuários médicos e conformidade c
 ## 🛠️ Tecnologias Utilizadas
 
 - **Backend**: FastAPI, Python 3.12, Uvicorn.
-- **LLM**: LangChain / LangGraph (GPT-4o).
+- **LLM**: LangChain / LangGraph (GPT-5.4 , Claude-Sonnet-4.6).
 - **Banco de Dados**: Amazon Athena (PyAthena) e PostgreSQL (Psycopg3).
 - **Vetorizadores**: Pinecone.
 - **DevOps**: Docker, UV (Fast package manager), Render (Blueprint deployment).
