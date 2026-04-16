@@ -1,10 +1,15 @@
 import asyncio
+from contextvars import ContextVar
 from pyathena import connect
 from app.core.config import settings
 from langchain_core.tools import tool
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Contexto por-task que armazena os dados brutos retornados pelo Athena.
+# Permite que o Agente Avaliador acesse os dados sem re-executar queries.
+athena_results_context: ContextVar[list] = ContextVar("athena_results", default=[])
 
 
 def validate_sql(sql: str) -> None:
@@ -67,6 +72,10 @@ async def query_athena_tool(sql: str) -> str:
     try:
         # Executa a query síncrona em uma thread separada para não bloquear o loop de eventos
         results = await asyncio.to_thread(_execute_athena_query, sql)
+
+        # Captura os dados brutos no contexto para uso pelo Agente Avaliador
+        captured = athena_results_context.get([])
+        athena_results_context.set(captured + [{"sql": sql, "results": results}])
 
         if not results:
             logger.info("Ferramenta Athena: Nenhum resultado encontrado.")
