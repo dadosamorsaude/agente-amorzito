@@ -4,7 +4,7 @@ Agente Avaliador de Acurácia — LLM-as-Judge
 Compara a resposta do AMORZITO com os dados brutos retornados pelo Athena,
 gerando um score de 0-100 com justificativa detalhada dos erros encontrados.
 
-Modelo: GPT-5.0 (robusto para análise estruturada em background)
+Modelo: GPT-5.4 (robusto para análise estruturada em background)
 """
 
 import json
@@ -85,9 +85,9 @@ EVALUATOR_USER_TEMPLATE = """
 # ──────────────────────────────────────────────────────────────────────────────
 
 def _get_evaluator_llm() -> ChatOpenAI:
-    """Retorna o LLM avaliador (GPT-5.0, temperatura 0 para consistência)."""
+    """Retorna o LLM avaliador (GPT-5.4, temperatura 0 para consistência)."""
     return ChatOpenAI(
-        model="gpt-5.0",
+        model="gpt-5.4",
         temperature=0.0,
         api_key=settings.OPENAI_API_KEY,
     )
@@ -156,7 +156,7 @@ async def evaluate_response(
 
         evaluation = json.loads(raw_content)
         evaluation["evaluated_at"] = datetime.utcnow().isoformat()
-        evaluation["model"] = "gpt-5.0"
+        evaluation["model"] = "gpt-5.4"
         evaluation["had_rag_context"] = bool(rag_context)
         evaluation["had_athena_data"] = bool(raw_athena_data)
 
@@ -186,5 +186,5 @@ def _empty_evaluation(reason: str) -> dict:
         "erros_encontrados": [reason],
         "justificativa": reason,
         "evaluated_at": datetime.utcnow().isoformat(),
-        "model": "gpt-5.0",
+        "model": "gpt-5.4",
     }
