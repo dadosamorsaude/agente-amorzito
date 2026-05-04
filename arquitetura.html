@@ -3,141 +3,530 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AMORZITO - Arquitetura Executiva</title>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@400;500&display=swap" rel="stylesheet">
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>AMORZITO - Arquitetura do Sistema</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; background: #0f172a; color: #f8fafc; }
-        h1, h2, h3 { font-family: 'Outfit', sans-serif; }
-        .glass-card {
-            background: rgba(30, 41, 59, 0.7);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 16px;
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
-            transition: transform 0.3s ease;
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg:        #080d1a;
+            --surface:   rgba(15, 23, 42, 0.85);
+            --border:    rgba(255,255,255,0.07);
+            --indigo:    #818cf8;
+            --purple:    #c084fc;
+            --emerald:   #34d399;
+            --amber:     #fbbf24;
+            --rose:      #fb7185;
+            --blue:      #60a5fa;
+            --orange:    #fb923c;
+            --teal:      #2dd4bf;
+            --slate:     #94a3b8;
         }
-        .glass-card:hover { transform: translateY(-5px); border-color: rgba(99, 102, 241, 0.5); }
-        .gradient-text {
-            background: linear-gradient(90deg, #818cf8, #c084fc);
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: #f1f5f9;
+            min-height: 100vh;
+            padding: 60px 24px;
+            background-image:
+                radial-gradient(ellipse 80% 50% at 50% -10%, rgba(99,102,241,0.18) 0%, transparent 60%),
+                radial-gradient(ellipse 50% 40% at 90% 80%, rgba(168,85,247,0.12) 0%, transparent 50%);
+        }
+
+        h1, h2, h3, h4 { font-family: 'Outfit', sans-serif; }
+
+        .wrapper { max-width: 960px; margin: 0 auto; }
+
+        /* ── HEADER ── */
+        .header { text-align: center; margin-bottom: 72px; }
+        .header h1 {
+            font-size: clamp(2rem, 5vw, 3.5rem);
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            background: linear-gradient(100deg, var(--indigo) 20%, var(--purple) 80%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
-        .connection-line {
+        .header p {
+            margin-top: 14px;
+            color: var(--slate);
+            font-size: 1rem;
+            max-width: 520px;
+            margin-inline: auto;
+            line-height: 1.7;
+        }
+        .badge {
+            display: inline-block;
+            margin-bottom: 18px;
+            padding: 4px 14px;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            background: rgba(129,140,248,0.12);
+            border: 1px solid rgba(129,140,248,0.3);
+            color: var(--indigo);
+        }
+
+        /* ── CARDS ── */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            backdrop-filter: blur(16px);
+            box-shadow: 0 8px 40px rgba(0,0,0,0.45);
+            transition: transform 0.25s ease, border-color 0.25s ease;
+        }
+        .card:hover { transform: translateY(-4px); }
+        .card.accent-indigo  { border-top: 3px solid var(--indigo);  }
+        .card.accent-emerald { border-top: 3px solid var(--emerald); }
+        .card.accent-purple  { border-top: 3px solid var(--purple);  }
+        .card.accent-blue    { border-top: 3px solid var(--blue);    }
+        .card.accent-amber   { border-top: 3px solid var(--amber);   }
+        .card.accent-rose    { border-top: 3px solid var(--rose);    }
+        .card.accent-teal    { border-top: 3px solid var(--teal);    }
+        .card.accent-orange  { border-top: 3px solid var(--orange);  }
+
+        /* ── CONNECTOR ── */
+        .connector {
             width: 2px;
-            background: linear-gradient(180deg, #6366f1, #a855f7);
+            background: linear-gradient(180deg, rgba(129,140,248,0.6), rgba(192,132,252,0.3));
             margin: 0 auto;
         }
-        .connection-horizontal {
-            height: 2px;
-            background: linear-gradient(90deg, #6366f1, #a855f7);
-            flex-grow: 1;
+
+        /* ── FLOW ── */
+        .flow { display: flex; flex-direction: column; align-items: center; gap: 0; }
+        .flow-node { width: 100%; max-width: 540px; }
+
+        /* ── SECTION LABEL ── */
+        .section-label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
         }
-        .icon-circle {
-            width: 48px; height: 48px; border-radius: 50%;
+        .section-label-line { flex: 1; height: 1px; background: var(--border); }
+        .section-label span {
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--slate);
+            white-space: nowrap;
+        }
+
+        /* ── ICON CHIP ── */
+        .icon-chip {
+            width: 44px; height: 44px;
+            border-radius: 12px;
             display: flex; align-items: center; justify-content: center;
-            font-size: 24px; margin-bottom: 12px;
+            font-size: 22px;
+            flex-shrink: 0;
         }
+
+        /* ── PILL TAG ── */
+        .pill {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 999px;
+            font-size: 0.68rem;
+            font-weight: 600;
+        }
+        .pill-indigo  { background: rgba(129,140,248,0.12); color: var(--indigo); border: 1px solid rgba(129,140,248,0.25); }
+        .pill-emerald { background: rgba(52,211,153,0.12);  color: var(--emerald); border: 1px solid rgba(52,211,153,0.25); }
+        .pill-rose    { background: rgba(251,113,133,0.12); color: var(--rose);  border: 1px solid rgba(251,113,133,0.25); }
+        .pill-amber   { background: rgba(251,191,36,0.12);  color: var(--amber); border: 1px solid rgba(251,191,36,0.25); }
+        .pill-purple  { background: rgba(192,132,252,0.12); color: var(--purple); border: 1px solid rgba(192,132,252,0.25); }
+        .pill-teal    { background: rgba(45,212,191,0.12);  color: var(--teal); border: 1px solid rgba(45,212,191,0.25); }
+        .pill-orange  { background: rgba(251,146,60,0.12);  color: var(--orange);border: 1px solid rgba(251,146,60,0.25); }
+
+        /* ── TOOL GRID ── */
+        .tool-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 12px;
+            margin-top: 16px;
+        }
+        .tool-item {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px 12px;
+            text-align: center;
+            transition: border-color 0.2s;
+        }
+        .tool-item:hover { border-color: rgba(129,140,248,0.3); }
+        .tool-item .emoji { font-size: 24px; display: block; margin-bottom: 8px; }
+        .tool-item h5 { font-size: 0.82rem; font-weight: 600; margin-bottom: 4px; }
+        .tool-item p  { font-size: 0.72rem; color: var(--slate); line-height: 1.5; }
+
+        /* ── EVAL GRID ── */
+        .eval-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-top: 16px;
+        }
+        @media (max-width: 500px) { .eval-grid { grid-template-columns: 1fr; } }
+        .eval-criterion {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px 14px;
+        }
+        .eval-criterion .label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
+        .eval-criterion .pts   { font-size: 1.2rem; font-weight: 800; margin-bottom: 2px; }
+        .eval-criterion p      { font-size: 0.72rem; color: var(--slate); line-height: 1.5; }
+
+        /* ── CACHE SPLIT ── */
+        .cache-split {
+            width: 100%;
+            max-width: 760px;
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            align-items: center;
+            gap: 16px;
+            margin: 0 auto;
+            padding: 0 8px;
+        }
+        .cache-branch {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+        .branch-tag {
+            font-size: 0.68rem;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            padding: 3px 12px;
+            border-radius: 999px;
+        }
+        .branch-tag.miss { background: rgba(251,113,133,0.12); color: var(--rose);   border: 1px solid rgba(251,113,133,0.25); }
+        .branch-tag.hit  { background: rgba(52,211,153,0.12);  color: var(--emerald); border: 1px solid rgba(52,211,153,0.25); }
+        .branch-note { font-size: 0.7rem; color: var(--slate); text-align: center; line-height: 1.4; }
+
+        /* spacing helpers */
+        .p-card  { padding: 28px; }
+        .mt-s    { margin-top: 8px; }
+        .mt-m    { margin-top: 16px; }
+        .mt-l    { margin-top: 24px; }
+        .gap-row { display: flex; align-items: center; gap: 14px; }
+        .col-2   { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+        @media (max-width: 480px) { .col-2 { grid-template-columns: 1fr; } }
+        .mini-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 14px;
+        }
+        .mini-card .sub  { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--slate); margin-bottom: 4px; }
+        .mini-card .val  { font-size: 1rem; font-weight: 700; margin-bottom: 2px; }
+        .mini-card p     { font-size: 0.72rem; color: var(--slate); }
+
+        .divider { width: 100%; height: 1px; background: var(--border); margin: 24px 0; }
+
+        .bg-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px;
+            margin-top: 16px;
+        }
+        .bg-row .txt h5 { font-size: 0.85rem; font-weight: 600; margin-bottom: 3px; }
+        .bg-row .txt p  { font-size: 0.72rem; color: var(--slate); line-height: 1.5; }
+
+        .metrics-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-top: 16px;
+        }
+        @media (max-width: 560px) { .metrics-row { grid-template-columns: repeat(2, 1fr); } }
+        .metric-box {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px 10px;
+            text-align: center;
+        }
+        .metric-box .pts { font-size: 1.4rem; font-weight: 800; display: block; }
+        .metric-box small { font-size: 0.68rem; color: var(--slate); }
+
+        /* ── OBSERVE ROW ── */
+        .observe-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-top: 20px;
+        }
+        @media (max-width: 560px) { .observe-row { grid-template-columns: 1fr; } }
+        .observe-item {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+        }
+        .observe-item .ico { font-size: 22px; margin-bottom: 8px; }
+        .observe-item h5 { font-size: 0.82rem; font-weight: 600; margin-bottom: 4px; }
+        .observe-item p  { font-size: 0.71rem; color: var(--slate); line-height: 1.4; }
+
+        footer { text-align: center; margin-top: 64px; color: var(--slate); font-size: 0.78rem; }
     </style>
 </head>
-<body class="min-h-screen py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-slate-900 via-[#0f172a] to-[#1e1b4b]">
+<body>
+<div class="wrapper">
 
-    <div class="max-w-6xl mx-auto">
-        <!-- Header -->
-        <div class="text-center mb-16">
-            <h1 class="text-5xl font-extrabold mb-4 uppercase tracking-tight">Arquitetura <span class="gradient-text">AMORZITO AI</span></h1>
-            <p class="text-slate-400 text-lg max-w-2xl mx-auto">Eco-sistema cognitivo de alta performance para clínica médica. Diagrama executivo de integrações e ferramentas.</p>
+    <!-- ── HEADER ── -->
+    <header class="header">
+        <div class="badge">Diagrama Executivo da Arquitetura</div>
+        <h1>AMORZITO AI Agent</h1>
+        <p>Ecossistema cognitivo de análise de prontuários médicos com conformidade CFM, avaliação automática de acurácia e observabilidade completa.</p>
+    </header>
+
+    <!-- ── FLOW ── -->
+    <div class="flow">
+
+        <!-- 1 FRONTEND -->
+        <div class="flow-node">
+            <div class="section-label">
+                <div class="section-label-line"></div>
+                <span>Ponto de Entrada</span>
+                <div class="section-label-line"></div>
+            </div>
+            <div class="card accent-indigo p-card">
+                <div class="gap-row">
+                    <div class="icon-chip" style="background:rgba(129,140,248,0.12)">👨‍⚕️</div>
+                    <div>
+                        <h3 style="font-size:1.1rem;font-weight:700">Frontend — Lovable App</h3>
+                        <p style="font-size:0.78rem;color:var(--slate);margin-top:4px">Interface web para médicos. Comunica via SSE (streaming) ou JSON.</p>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <!-- Flow Container -->
-        <div class="flex flex-col items-center gap-6">
+        <div class="connector" style="height:36px"></div>
 
-            <!-- Nivel 1: Usuário & Frontend -->
-            <div class="glass-card p-6 w-full max-w-md text-center relative z-10 border-t-4 border-t-indigo-500">
-                <div class="icon-circle bg-indigo-500/20 text-indigo-400 mx-auto">👨‍⚕️</div>
-                <h3 class="text-xl font-bold">Frontend (Lovable App)</h3>
-                <p class="text-slate-400 text-sm mt-2">Ponto de contato seguro com os médicos. Ambiente web validado.</p>
-            </div>
-
-            <div class="connection-line h-12"></div>
-
-            <!-- Nivel 2: API & Segurança -->
-            <div class="glass-card p-6 w-full max-w-lg text-center relative z-10 border-t-4 border-t-emerald-500">
-                <div class="icon-circle bg-emerald-500/20 text-emerald-400 mx-auto">🛡️</div>
-                <h3 class="text-xl font-bold">API Gateway (FastAPI)</h3>
-                <p class="text-slate-400 text-sm mt-2">Proteção CORS focada. Processamento Async. Recebe e roteia requisições do Lovable de forma segura.</p>
-            </div>
-
-            <!-- Camada de Custo / Cache (Desvio horizontal) -->
-            <div class="flex w-full max-w-4xl items-center justify-center my-6">
-                <!-- Miss Branch -->
-                <div class="flex flex-col items-center w-1/3">
-                    <span class="text-xs text-rose-400 mb-2 font-semibold bg-rose-400/10 px-3 py-1 rounded-full border border-rose-400/20">NOVO ASSUNTO (MISS)</span>
-                    <div class="connection-line h-16 bg-gradient-to-b from-rose-500 to-rose-700"></div>
-                </div>
-                
-                <!-- Central Cache Check -->
-                <div class="glass-card p-6 w-1/3 text-center border-t-4 border-t-blue-500 relative z-20 shadow-[0_0_40px_rgba(59,130,246,0.3)] mx-4">
-                    <div class="icon-circle bg-blue-500/20 text-blue-400 mx-auto">⚡</div>
-                    <h3 class="text-md font-bold">Pinecone Semantic Cache</h3>
-                    <p class="text-slate-400 text-xs mt-1">Gera vetor na OpenAI e verifica repetições de contexto similar na empresa (>95%).</p>
-                </div>
-
-                <!-- Hit Branch -->
-                <div class="flex flex-col items-center w-1/3">
-                    <span class="text-xs text-emerald-400 mb-2 font-semibold bg-emerald-400/10 px-3 py-1 rounded-full border border-emerald-400/20">PERGUNTA REPETIDA (HIT)</span>
-                    <div class="connection-line h-16 bg-gradient-to-b from-emerald-500 to-emerald-700"></div>
-                    <div class="text-xs mt-2 text-slate-500 text-center">Deixa de gastar a IA e <br>devolve em 0.05s</div>
-                </div>
-            </div>
-
-            <!-- Nivel 3: Motor de IA (Workflow Central) -->
-            <div class="glass-card p-8 w-full max-w-3xl border-t-4 border-t-fuchsia-500 relative z-10 mt-4">
-                <div class="flex items-center gap-4 mb-6 pb-4 border-b border-white/10">
-                    <div class="icon-circle bg-fuchsia-500/20 text-fuchsia-400 m-0">🧠</div>
-                    <div class="text-left">
-                        <h3 class="text-2xl font-bold">Motor de Orquestração (LangGraph)</h3>
-                        <p class="text-slate-400 text-sm">Cérebro corporativo. Processa apenas as respostas originais (MISS).</p>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="bg-slate-800/50 p-4 rounded-xl border border-white/5">
-                        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Cérebro LLM</span>
-                        <div class="text-lg font-semibold text-orange-300">Claude Sonnet 4.6</div>
-                        <p class="text-xs text-slate-500 mt-1">Conduz reflexões clínicas</p>
-                    </div>
-                    <div class="bg-slate-800/50 p-4 rounded-xl border border-white/5">
-                        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Memória de Curto Prazo</span>
-                        <div class="text-lg font-semibold text-emerald-300">Supabase (PostgreSQL)</div>
-                        <p class="text-xs text-slate-500 mt-1">Limitado as últimas 10 msgs (corte de custos)</p>
-                    </div>
-                </div>
-
-                <!-- Tools Seção Interna -->
-                <div class="mt-8">
-                    <h4 class="text-sm font-bold text-slate-300 uppercase tracking-widest text-center mb-4">Fontes de Verdade (Tools)</h4>
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div class="bg-slate-900/80 p-4 rounded-lg text-center border border-white/5 hover:border-amber-500/30 transition-colors">
-                            <div class="text-2xl mb-2">📊</div>
-                            <h5 class="text-sm font-bold text-white">Prontuários Abertos</h5>
-                            <p class="text-xs text-slate-400 mt-1">AWS Athena / S3</p>
-                        </div>
-                        <div class="bg-slate-900/80 p-4 rounded-lg text-center border border-white/5 hover:border-blue-500/30 transition-colors">
-                            <div class="text-2xl mb-2">⚖️</div>
-                            <h5 class="text-sm font-bold text-white">Manual Qualidade/CFM</h5>
-                            <p class="text-xs text-slate-400 mt-1">RAG Pinecone</p>
-                        </div>
-                        <div class="bg-slate-900/80 p-4 rounded-lg text-center border border-white/5 hover:border-purple-500/30 transition-colors">
-                            <div class="text-2xl mb-2">📑</div>
-                            <h5 class="text-sm font-bold text-white">Protocolos Internos</h5>
-                            <p class="text-xs text-slate-400 mt-1">RAG Pinecone POPs</p>
-                        </div>
+        <!-- 2 API GATEWAY -->
+        <div class="flow-node">
+            <div class="card accent-emerald p-card">
+                <div class="gap-row">
+                    <div class="icon-chip" style="background:rgba(52,211,153,0.12)">🛡️</div>
+                    <div>
+                        <h3 style="font-size:1.1rem;font-weight:700">API Gateway — FastAPI</h3>
+                        <p style="font-size:0.78rem;color:var(--slate);margin-top:4px">Auth via <code>X-API-Key</code> · CORS configurado · Endpoints: <code>/chat</code> · <code>/metrics</code></p>
                     </div>
                 </div>
             </div>
-
         </div>
-    </div>
+
+        <div class="connector" style="height:36px"></div>
+
+        <!-- 3 SEMANTIC CACHE SPLIT -->
+        <div style="width:100%;max-width:540px">
+            <div class="section-label">
+                <div class="section-label-line"></div>
+                <span>Cache Semântico</span>
+                <div class="section-label-line"></div>
+            </div>
+        </div>
+
+        <div class="cache-split">
+            <!-- MISS -->
+            <div class="cache-branch">
+                <div class="branch-tag miss">↓ MISS — novo assunto</div>
+                <div class="connector" style="height:28px;background:linear-gradient(180deg,var(--rose),transparent)"></div>
+            </div>
+
+            <!-- CACHE CARD -->
+            <div class="card accent-blue p-card" style="text-align:center;min-width:200px">
+                <div class="icon-chip" style="background:rgba(96,165,250,0.12);margin:0 auto 12px">⚡</div>
+                <h3 style="font-size:0.95rem;font-weight:700">Pinecone Semantic Cache</h3>
+                <p style="font-size:0.72rem;color:var(--slate);margin-top:6px">Embedding via OpenAI. Threshold &gt; 95% de similaridade retorna imediatamente.</p>
+            </div>
+
+            <!-- HIT -->
+            <div class="cache-branch">
+                <div class="branch-tag hit">↑ HIT — resposta em 50ms</div>
+                <div class="branch-note" style="margin-top:8px">Economia de tokens.<br>Retorna ao cliente.</div>
+            </div>
+        </div>
+
+        <div class="connector" style="height:36px;max-width:540px"></div>
+
+        <!-- 4 ORCHESTRATOR / LANGGRAPH -->
+        <div class="flow-node">
+            <div class="section-label">
+                <div class="section-label-line"></div>
+                <span>Motor de Orquestração</span>
+                <div class="section-label-line"></div>
+            </div>
+            <div class="card accent-purple p-card">
+                <div class="gap-row" style="margin-bottom:20px">
+                    <div class="icon-chip" style="background:rgba(192,132,252,0.12)">🧠</div>
+                    <div>
+                        <h3 style="font-size:1.15rem;font-weight:700">LangGraph — ReAct Agent</h3>
+                        <p style="font-size:0.78rem;color:var(--slate);margin-top:4px">Orquestra raciocínio, ferramentas e memória. Suporta streaming de tokens.</p>
+                    </div>
+                </div>
+
+                <div class="col-2">
+                    <div class="mini-card">
+                        <div class="sub">Cérebro LLM</div>
+                        <div class="val" style="color:var(--orange)">Claude Sonnet 4.6</div>
+                        <p>Anthropic · Temperatura 0.4</p>
+                    </div>
+                    <div class="mini-card">
+                        <div class="sub">Memória de Sessão</div>
+                        <div class="val" style="color:var(--emerald)">PostgreSQL (Supabase)</div>
+                        <p>Últimas 10 mensagens por sessão</p>
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+
+                <h4 style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--slate);margin-bottom:12px">Fontes de Verdade — Tools</h4>
+                <div class="tool-grid">
+                    <div class="tool-item">
+                        <span class="emoji">📊</span>
+                        <h5>query_athena</h5>
+                        <p>Consultas SQL nos prontuários via AWS Athena / S3</p>
+                    </div>
+                    <div class="tool-item">
+                        <span class="emoji">⚖️</span>
+                        <h5>search_cfm</h5>
+                        <p>Diretrizes CFM, Resolução 2.153/2016 — RAG Pinecone</p>
+                    </div>
+                    <div class="tool-item">
+                        <span class="emoji">📑</span>
+                        <h5>search_sop</h5>
+                        <p>POPs internos e protocolos operacionais — RAG Pinecone</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="connector" style="height:36px"></div>
+
+        <!-- 5 AGENTE AVALIADOR -->
+        <div class="flow-node">
+            <div class="section-label">
+                <div class="section-label-line"></div>
+                <span>Avaliação de Qualidade · Background</span>
+                <div class="section-label-line"></div>
+            </div>
+            <div class="card accent-rose p-card">
+                <div class="gap-row" style="margin-bottom:20px">
+                    <div class="icon-chip" style="background:rgba(251,113,133,0.12)">🔬</div>
+                    <div>
+                        <div class="gap-row" style="gap:8px;margin-bottom:4px">
+                            <h3 style="font-size:1.1rem;font-weight:700">Agente Avaliador — LLM-as-Judge</h3>
+                            <span class="pill pill-rose">novo</span>
+                        </div>
+                        <p style="font-size:0.78rem;color:var(--slate)">Avalia automaticamente cada resposta em background. Zero impacto na latência do usuário.</p>
+                    </div>
+                </div>
+
+                <div class="bg-row">
+                    <div style="font-size:20px">⚙️</div>
+                    <div class="txt">
+                        <h5>Modelo Juiz: GPT-5.4</h5>
+                        <p>Compara a resposta do AMORZITO com os <strong>dados brutos do Athena</strong> e os <strong>trechos do RAG</strong> capturados via <code>contextvars</code> durante a execução.</p>
+                    </div>
+                </div>
+
+                <div style="margin-top:20px">
+                    <div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--slate);margin-bottom:10px">Score 0–100 · Critérios</div>
+                    <div class="metrics-row">
+                        <div class="metric-box" style="border-color:rgba(96,165,250,0.2)">
+                            <span class="pts" style="color:var(--blue)">35</span>
+                            <small>Precisão Factual</small>
+                        </div>
+                        <div class="metric-box" style="border-color:rgba(52,211,153,0.2)">
+                            <span class="pts" style="color:var(--emerald)">25</span>
+                            <small>Completude</small>
+                        </div>
+                        <div class="metric-box" style="border-color:rgba(192,132,252,0.2)">
+                            <span class="pts" style="color:var(--purple)">25</span>
+                            <small>Interpretação Clínica</small>
+                        </div>
+                        <div class="metric-box" style="border-color:rgba(251,191,36,0.2)">
+                            <span class="pts" style="color:var(--amber)">15</span>
+                            <small>Aplicação Normativa</small>
+                        </div>
+                    </div>
+                    <p style="font-size:0.7rem;color:var(--slate);margin-top:10px;text-align:center">Aprovado se score ≥ 70 · Resultados persistidos em <code>evaluation_logs</code> (PostgreSQL)</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="connector" style="height:36px"></div>
+
+        <!-- 6 MÉTRICAS -->
+        <div class="flow-node">
+            <div class="card accent-teal p-card">
+                <div class="gap-row">
+                    <div class="icon-chip" style="background:rgba(45,212,191,0.12)">📈</div>
+                    <div>
+                        <div class="gap-row" style="gap:8px;margin-bottom:4px">
+                            <h3 style="font-size:1.1rem;font-weight:700">Endpoints de Métricas</h3>
+                            <span class="pill pill-teal">novo</span>
+                        </div>
+                        <p style="font-size:0.78rem;color:var(--slate);margin-top:2px"><code>GET /metrics/summary</code> · <code>GET /metrics/history</code> · Protegidos por API Key</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="connector" style="height:36px"></div>
+
+        <!-- 7 OBSERVABILIDADE -->
+        <div class="flow-node">
+            <div class="section-label">
+                <div class="section-label-line"></div>
+                <span>Observabilidade &amp; DevOps</span>
+                <div class="section-label-line"></div>
+            </div>
+            <div class="card accent-amber p-card">
+                <div class="gap-row" style="margin-bottom:0">
+                    <div class="icon-chip" style="background:rgba(251,191,36,0.12)">🔭</div>
+                    <div>
+                        <h3 style="font-size:1.1rem;font-weight:700">Observabilidade Completa</h3>
+                        <p style="font-size:0.78rem;color:var(--slate);margin-top:4px">Tracing, logs e deployment</p>
+                    </div>
+                </div>
+                <div class="observe-row">
+                    <div class="observe-item">
+                        <div class="ico">🔬</div>
+                        <h5>LangSmith</h5>
+                        <p>Tracing completo de todas as execuções do agente e chamadas de tools</p>
+                    </div>
+                    <div class="observe-item">
+                        <div class="ico">📋</div>
+                        <h5>Loguru</h5>
+                        <p>Logs estruturados por request com latência e status de cada etapa</p>
+                    </div>
+                    <div class="observe-item">
+                        <div class="ico">🚀</div>
+                        <h5>Render (Blueprint)</h5>
+                        <p>Deploy via Docker + UV. Auto-deploy a partir do GitHub</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div><!-- /flow -->
+
+    <footer>
+        <p>AMORZITO AI Agent · FastAPI + LangGraph + Claude Sonnet 4.6 + GPT-5.4</p>
+    </footer>
+
+</div>
 </body>
 </html>

@@ -9,7 +9,7 @@ from app.core.config import settings
 # Captura tanto CFM quanto POPs para uso pelo Agente Avaliador.
 rag_results_context: ContextVar[list] = ContextVar("rag_results", default=[])
 
-def get_retriever(index_name: str):
+def get_retriever(index_name: str, namespace: str = ""):
     """
     Initializes and returns a specific Pinecone retriever.
     """
@@ -19,8 +19,8 @@ def get_retriever(index_name: str):
     # 🔹 embeddings
     embeddings = OpenAIEmbeddings(
         api_key=settings.OPENAI_API_KEY,
-        model="text-embedding-3-small",
-        dimensions=1024
+        model="text-embedding-3-large",
+        dimensions=3072
     )
 
     # 🔹 cliente Pinecone (OBRIGATÓRIO na versão nova)
@@ -31,14 +31,15 @@ def get_retriever(index_name: str):
     # 🔹 vector store
     vectorstore = PineconeVectorStore(
         index=index,
-        embedding=embeddings
+        embedding=embeddings,
+        namespace=namespace
     )
 
     return vectorstore.as_retriever(search_kwargs={"k": 5})
 
 
-def get_cfm_retriever():
-    return get_retriever(settings.PINECONE_INDEX_CFM)
+def get_cfm_retriever(namespace: str = ""):
+    return get_retriever(settings.PINECONE_INDEX_CFM, namespace=namespace)
 
 def get_pop_retriever():
     return get_retriever(settings.PINECONE_INDEX_POP)
@@ -49,20 +50,32 @@ def search_medical_compliance_tool(query: str) -> str:
     OBRIGATÓRIO: Use esta ferramenta para buscar diretrizes CFM, Resolução 2.153/2016, 
     padrões de qualidade de prontuários, critérios de conformidade documental, 
     anamnese, conduta, hipótese diagnóstica, CID e boas práticas de registro clínico.
+    Também contém as regras de negócio do dashboard de qualidade.
     """
-    retriever = get_cfm_retriever()
-    if not retriever: return "Erro ao configurar buscador CFM."
-    docs = retriever.invoke(query)
+    # Busca em ambos os namespaces do novo index
+    retriever_normas = get_cfm_retriever(namespace="cfm_2153_2016")
+    retriever_regras = get_cfm_retriever(namespace="regras_negocio_prontuario")
+    
+    if not retriever_normas or not retriever_regras: 
+        return "Erro ao configurar buscador de conformidade."
+    
+    docs_normas = retriever_normas.invoke(query)
+    docs_regras = retriever_regras.invoke(query)
+    
+    all_docs = docs_normas + docs_regras
     
     # Captura os trechos recuperados no contexto para o Agente Avaliador
     captured = rag_results_context.get([])
     rag_results_context.set(captured + [{
-        "source": "CFM",
+        "source": "CFM/Regras",
         "query": query,
-        "chunks": [d.page_content for d in docs]
+        "chunks": [d.page_content for d in all_docs]
     }])
     
-    return "\n\n".join([d.page_content for d in docs]) if docs else "Nenhuma diretriz encontrada."
+    if not all_docs:
+        return "Nenhuma diretriz ou regra encontrada."
+
+    return "\n\n".join([d.page_content for d in all_docs])
 
 @tool
 def search_sop_tool(query: str) -> str:

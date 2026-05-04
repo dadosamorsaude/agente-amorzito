@@ -1,7 +1,9 @@
 # Environments
 .env
 .env.*
-create_pinecone_index.py
+criar_index_pinecone.py
+chunking-normas.py
+chunking-regras.py
 
 # Python-generated files
 __pycache__/
@@ -19,3 +21,7 @@ wheels/
 # IDEs
 .vscode/
 .idea/
+
+# RAG
+rag/*.pdf
+rag/*.jsonl
