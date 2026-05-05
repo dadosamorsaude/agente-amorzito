@@ -17,20 +17,23 @@ async def analyze_clinical_performance_tool(limit: int = 10) -> str:
     try:
         # 1. Busca os dados brutos no Athena usando a ferramenta existente
         # Ajuste o SQL conforme a estrutura da sua tabela
-        query = f"SELECT conteudo_prontuario FROM atendimentos ORDER BY data_atendimento DESC LIMIT {limit}"
-        athena_results_str = await query_athena_tool(query)
+        query = f"SELECT anamnese, conduta, hipotese_diagnostica, cid_codigo, prontuario_assinado FROM pdgt_amorsaude_inteligencia.tb_qualidade_prontuarios ORDER BY data_atendimento DESC LIMIT {limit}"
+        athena_results_str = await query_athena_tool.ainvoke({"sql": query})
         
         # 2. Processa os resultados do Athena
-        # O query_athena_tool retorna uma string (geralmente JSON ou formatada)
-        # Vamos tentar extrair os textos dos prontuários
+        import ast
         try:
-            records_data = json.loads(athena_results_str)
-            # Assume que o resultado é uma lista de dicts com a chave 'conteudo_prontuario'
-            records = [str(r.get('conteudo_prontuario', '')) for r in records_data if r.get('conteudo_prontuario')]
+            # O query_athena_tool retorna str(list[dict])
+            records_data = ast.literal_eval(athena_results_str)
+            if not isinstance(records_data, list):
+                records = [athena_results_str]
+            else:
+                # Cada item é um dict com as colunas do prontuário
+                records = [f"Prontuário: {json.dumps(r, ensure_ascii=False)}" for r in records_data]
         except:
-            # Fallback se não for JSON (caso o retorno do Athena seja formatado de outra forma)
-            logger.warning("Não foi possível parsear retorno do Athena como JSON, tentando extração bruta.")
-            records = [athena_results_str] # Usa o bloco inteiro como um registro único se falhar
+            # Fallback se não for literal_eval (caso o retorno seja texto simples)
+            logger.warning("Não foi possível parsear retorno do Athena como lista, usando extração bruta.")
+            records = [athena_results_str]
 
         if not records or (len(records) == 1 and not records[0]):
             return "Não foram encontrados prontuários recentes no banco de dados para realizar a análise."
