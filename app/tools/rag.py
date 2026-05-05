@@ -3,6 +3,7 @@ from pinecone import Pinecone
 from langchain_pinecone import PineconeVectorStore
 from langchain_openai import OpenAIEmbeddings
 from langchain_core.tools import tool
+from langsmith import traceable
 from app.core.config import settings
 
 rag_results_context: ContextVar[list] = ContextVar("rag_results", default=[])
@@ -101,6 +102,7 @@ def format_docs(docs) -> str:
 
 
 @tool
+@traceable(name="search_medical_compliance_tool")
 def search_medical_compliance_tool(query: str) -> str:
     """
     OBRIGATÓRIO: Use esta ferramenta para buscar diretrizes CFM, Resolução CFM 2.153/2016,
@@ -157,6 +159,7 @@ def search_medical_compliance_tool(query: str) -> str:
 
 
 @tool
+@traceable(name="search_sop_tool")
 def search_sop_tool(query: str) -> str:
     """
     OBRIGATÓRIO: Use esta ferramenta apenas para criação, revisão, estruturação

@@ -3,6 +3,7 @@ from contextvars import ContextVar
 from pyathena import connect
 from app.core.config import settings
 from langchain_core.tools import tool
+from langsmith import traceable
 import logging
 
 logger = logging.getLogger(__name__)
@@ -54,6 +55,7 @@ def _execute_athena_query(sql: str):
 
 
 @tool
+@traceable(name="query_athena_tool")
 async def query_athena_tool(sql: str) -> str:
     """
     Executa consultas SQL no AWS Athena para análise de prontuários médicos.
