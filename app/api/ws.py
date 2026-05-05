@@ -1,87 +1,126 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from app.agent.orchestrator import run_agent
 from app.services.transcription import transcribe_audio
+from app.core.config import settings
 from app.core.logger import logger
 import os
 import uuid
-import asyncio
+import json
 
-router = APIRouter(tags=["websocket"])
+router = APIRouter(tags=["voice-streaming"])
 
 UPLOAD_DIR = "temp_audios"
 
-@router.websocket("/ws/chat")
-async def websocket_chat(websocket: WebSocket):
+@router.websocket("/ws/voice")
+async def websocket_voice_endpoint(
+    websocket: WebSocket,
+    api_key: str = Query(None)
+):
     """
-    WebSocket para Chat por Voz em Tempo Real (Protótipo).
-    Recebe pedaços de áudio e processa ao finalizar.
+    WebSocket otimizado para Lovable/Deno Proxy.
+    Protocolo:
+    - Handshake: { "type": "start", "mime_type": "...", "sample_rate": ... }
+    - Data: Binary chunks (WebM/Opus)
+    - Finish: { "type": "stop" }
     """
-    await websocket.accept()
-    user_id = str(uuid.uuid4()) # Em produção, receber do handshake
-    logger.info(f"WebSocket conectado | session_id: {user_id}")
+    # 1. Validação de API Key via Query Param (Necessário para Deno Proxy)
+    if settings.AGENTE_API_KEY and api_key != settings.AGENTE_API_KEY:
+        await websocket.close(code=4003) # Forbidden
+        return
 
-    temp_filename = f"ws_voice_{user_id}.mp3"
+    await websocket.accept()
+    session_id = str(uuid.uuid4())
+    logger.info(f"Conexão Voice-WS estabelecida | session_id: {session_id}")
+
+    temp_filename = f"stream_{session_id}.webm"
     temp_path = os.path.join(UPLOAD_DIR, temp_filename)
     
     if not os.path.exists(UPLOAD_DIR):
         os.makedirs(UPLOAD_DIR)
 
+    audio_file = None
+    is_recording = False
+
     try:
-        with open(temp_path, "wb") as audio_file:
-            while True:
-                # Recebe dados do frontend
-                data = await websocket.receive()
-                
-                if "bytes" in data:
-                    # Se receber bytes, é pedaço de áudio
-                    audio_file.write(data["bytes"])
-                    # Feedback para o front que o áudio está chegando
-                    # await websocket.send_json({"status": "recording", "msg": "Recebendo áudio..."})
-                
-                elif "text" in data:
-                    # Se receber texto, pode ser um comando (ex: "FINISH")
-                    msg = data["text"]
-                    
-                    if msg == "FINISH":
-                        await websocket.send_json({"status": "processing", "msg": "Transcrevendo e analisando..."})
+        while True:
+            message = await websocket.receive()
+            
+            # A) TRATAMENTO DE BINÁRIO (CHUNKS DE ÁUDIO)
+            if "bytes" in message:
+                if is_recording and audio_file:
+                    audio_file.write(message["bytes"])
+                continue
+
+            # B) TRATAMENTO DE TEXTO (COMANDOS JSON)
+            if "text" in message:
+                try:
+                    data = json.loads(message["text"])
+                    msg_type = data.get("type")
+
+                    if msg_type == "start":
+                        logger.info(f"Iniciando gravação | session_id: {session_id}")
+                        audio_file = open(temp_path, "wb")
+                        is_recording = True
+                        await websocket.send_json({"type": "partial", "text": "Gravando áudio..."})
+
+                    elif msg_type == "stop":
+                        if not is_recording or not audio_file:
+                            continue
                         
-                        # 1. Fecha o arquivo e transcreve
+                        logger.info(f"Finalizando gravação | session_id: {session_id}")
+                        is_recording = False
                         audio_file.close()
-                        text = transcribe_audio(temp_path)
+                        audio_file = None
+
+                        await websocket.send_json({"type": "partial", "text": "Processando transcrição..."})
+
+                        # 1. Transcrição com Whisper
+                        transcribed_text = transcribe_audio(temp_path)
                         
-                        if not text:
-                            await websocket.send_json({"status": "error", "msg": "Não foi possível entender o áudio."})
+                        if not transcribed_text:
+                            await websocket.send_json({"type": "error", "message": "Não foi possível transcrever o áudio."})
                             continue
 
-                        await websocket.send_json({"status": "transcribed", "text": text})
+                        # Envia o texto final da transcrição
+                        await websocket.send_json({"type": "final", "text": transcribed_text})
 
-                        # 2. Chama o Agente (Streaming da resposta) com Auditoria Automática
+                        # 2. Análise Clínica Automática (AMORZITO)
+                        await websocket.send_json({"type": "partial", "text": "Realizando análise de conformidade clínica..."})
+                        
                         full_query = (
                             f"Analise a seguinte transcrição de consulta médica e realize uma auditoria de conformidade "
-                            f"baseada nas normas do CFM, RDCs e critérios de qualidade do AMORZITO:\n\n{text}"
+                            f"baseada nas normas do CFM, RDCs e critérios de qualidade do AMORZITO:\n\n{transcribed_text}"
                         )
 
                         full_response = ""
-                        async for chunk in run_agent(user_id, full_query, stream=True):
+                        async for chunk in run_agent(session_id, full_query, stream=True):
                             if chunk:
                                 full_response += chunk
-                                await websocket.send_json({"status": "ai_reply", "chunk": chunk})
+                                # Enviamos cada pedaço da análise para o front
+                                await websocket.send_json({"type": "partial", "text": chunk})
                         
-                        await websocket.send_json({"status": "done", "full_response": full_response})
-                        
-                        # Reabre o arquivo para novas gravações se o socket continuar aberto
-                        # (Opcional, dependendo da lógica do front)
-                        # audio_file = open(temp_path, "ab")
+                        # Resposta final da análise
+                        await websocket.send_json({
+                            "type": "final", 
+                            "text": full_response,
+                            "is_analysis": True 
+                        })
 
-                    elif msg == "PING":
-                        await websocket.send_text("PONG")
+                except json.JSONDecodeError:
+                    logger.warning(f"Recebido texto não-JSON no WS: {message['text']}")
+                    continue
 
     except WebSocketDisconnect:
-        logger.info(f"WebSocket desconectado | session_id: {user_id}")
+        logger.info(f"Voice-WS desconectado | session_id: {session_id}")
     except Exception as e:
-        logger.error(f"Erro no WebSocket: {e}")
-        await websocket.send_json({"status": "error", "msg": str(e)})
+        logger.error(f"Erro no Voice-WS: {e}")
+        try:
+            await websocket.send_json({"type": "error", "message": str(e)})
+        except:
+            pass
     finally:
+        if audio_file:
+            audio_file.close()
         if os.path.exists(temp_path):
             try:
                 os.remove(temp_path)
