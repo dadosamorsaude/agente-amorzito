@@ -2,6 +2,8 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.chat import router as chat_router
 from app.api.metrics import router as metrics_router
+from app.api.audio import router as audio_router
+from app.api.voice import router as voice_router
 from app.core.logger import logger
 import time
 import os
@@ -43,6 +45,8 @@ async def log_requests(request: Request, call_next):
 
 app.include_router(chat_router)
 app.include_router(metrics_router)
+app.include_router(audio_router)
+app.include_router(voice_router)
 
 
 @app.get("/")
