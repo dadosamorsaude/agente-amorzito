@@ -4,6 +4,7 @@
 criar_index_pinecone.py
 chunking-normas.py
 chunking-regras.py
+chunking-rdc.py
 
 # Python-generated files
 __pycache__/
@@ -22,6 +23,6 @@ wheels/
 .vscode/
 .idea/
 
-# RAG
-rag/*.pdf
-rag/*.jsonl
+# Temporary and Data folders
+scratch/
+rag/

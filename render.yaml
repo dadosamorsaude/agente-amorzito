@@ -26,9 +26,9 @@ services:
       - key: PINECONE_API_KEY
         sync: false
       - key: PINECONE_INDEX_CFM
-        value: qualidade-conformidade
+        value: qualidade-conformidade-2
       - key: PINECONE_INDEX_POP
-        value: pops-nr
+        value: pops-nr-2
       - key: DATABASE_URL
         sync: false
       - key: LANGCHAIN_TRACING_V2
