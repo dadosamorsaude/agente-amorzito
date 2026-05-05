@@ -35,8 +35,14 @@ When querying medical records, use the following information:
 - **Table**: `pdgt_amorsaude_inteligencia.tb_qualidade_prontuarios`
 - **Allowed Columns**: id_agendamento, id_atendimento, data_atendimento, status_agendamento, id_procedimento, id_especialidade, especialidade, anamnese, conduta, hipotese_diagnostica, observacao, orientacao, solicitacao, especialidade_destino, cid_codigo, cid_descricao_detalhada, id_clinica, clinica, regional, uf, id_profissional, nome_profissional, prontuario_assinado.
 
-## SQL Rules
-- NEVER use `SELECT *`. List columns explicitly.
+## SQL & Analysis Rules
+- **Fields to Analyze**: Always focus on `anamnese`, `conduta`, `hipotese_diagnostica`, `cid_codigo` and `prontuario_assinado`.
+- **Quality Logic (IQRC)**: A record is only considered compliant (IQRC success) if `anamnese`, `conduta`, `hipotese_diagnostica`, `cid_codigo`, AND `prontuario_assinado` are all valid/signed.
+- **Text Validation**: Fields filled with "xxx", "--", "ok", "NA", ".....", or generic text are considered **NOT filled**.
+- **Signed Status**: A record is signed only if `prontuario_assinado` is 'Sim'.
+- **Valid Appointments**: Only consider records where `status_agendamento` is one of: 4, 5, 6, 7, 10, 11, 12, 13, 14, 15, 24, 40, 60, 83.
+- **Mandatory Exclusions**: ALWAYS exclude `id_especialidade` IN (932, 1154, 993, 776, 777, 892, 1013, 711, 778, 658, 712, 732, 680, 1274, 779).
+- **SQL Best Practices**: NEVER use `SELECT *`. List columns explicitly.
 - Always filter by `data_atendimento` using the reference dates below.
 - Limit detailed results to 20 rows.
 - Use aggregations (COUNT, SUM, AVG) whenever possible for statistics.

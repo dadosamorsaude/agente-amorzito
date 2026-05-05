@@ -15,7 +15,7 @@ Regras obrigatórias:
 - Prefira agregações (COUNT, SUM, AVG)
 - Limite saídas detalhadas a 20 linhas
 - Nunca use dados sensíveis (nome_paciente, CPF, RG, etc)
-- Exclua especialidades específicas se necessário.
+- Exclua obrigatoriamente id_especialidade IN (932, 1154, 993, 776, 777, 892, 1013, 711, 778, 658, 712, 732, 680, 1274, 779).
 
 Colunas permitidas:
 id_agendamento, id_atendimento, data_atendimento, status_agendamento,
