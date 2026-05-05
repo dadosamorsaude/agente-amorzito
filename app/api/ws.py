@@ -55,9 +55,14 @@ async def websocket_chat(websocket: WebSocket):
 
                         await websocket.send_json({"status": "transcribed", "text": text})
 
-                        # 2. Chama o Agente (Streaming da resposta)
+                        # 2. Chama o Agente (Streaming da resposta) com Auditoria Automática
+                        full_query = (
+                            f"Analise a seguinte transcrição de consulta médica e realize uma auditoria de conformidade "
+                            f"baseada nas normas do CFM, RDCs e critérios de qualidade do AMORZITO:\n\n{text}"
+                        )
+
                         full_response = ""
-                        async for chunk in run_agent(user_id, text, stream=True):
+                        async for chunk in run_agent(user_id, full_query, stream=True):
                             if chunk:
                                 full_response += chunk
                                 await websocket.send_json({"status": "ai_reply", "chunk": chunk})

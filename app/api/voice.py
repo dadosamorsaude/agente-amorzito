@@ -47,9 +47,14 @@ async def chat_voice(
 
         logger.info(f"Transcrição concluída: {transcribed_text[:50]}...")
 
-        # 3. Executa o Agente com o texto transcrito
+        # 3. Executa o Agente com o texto transcrito + Instrução de Auditoria CFM
+        full_query = (
+            f"Analise a seguinte transcrição de consulta médica e realize uma auditoria de conformidade "
+            f"baseada nas normas do CFM, RDCs e critérios de qualidade do AMORZITO:\n\n{transcribed_text}"
+        )
+        
         full_response = ""
-        async for chunk in run_agent(user_id, transcribed_text, stream=False):
+        async for chunk in run_agent(user_id, full_query, stream=False):
             if chunk:
                 full_response += chunk
 
