@@ -47,10 +47,13 @@ async def chat_voice(
 
         logger.info(f"Transcrição concluída: {transcribed_text[:50]}...")
 
-        # 3. Executa o Agente com o texto transcrito + Instrução de Auditoria CFM
+        # 3. Executa o Agente com o texto transcrito + Instrução de Estruturação e Auditoria
         full_query = (
-            f"Analise a seguinte transcrição de consulta médica e realize uma auditoria de conformidade "
-            f"baseada nas normas do CFM, RDCs e critérios de qualidade do AMORZITO:\n\n{transcribed_text}"
+            "Com base na transcrição abaixo, realize as seguintes tarefas:\n"
+            "1. Estruture o texto nos campos: ANAMNESE, CONDUTA, HIPÓTESE DIAGNÓSTICA e CID-10.\n"
+            "2. Realize uma auditoria de conformidade clínica baseada nas normas do CFM e RDCs, "
+            "verificando se os campos estruturados atendem aos critérios de qualidade do AMORZITO.\n\n"
+            f"Transcrição:\n{transcribed_text}"
         )
         
         full_response = ""

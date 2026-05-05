@@ -88,8 +88,11 @@ async def websocket_voice_endpoint(
                         await websocket.send_json({"type": "partial", "text": "Realizando análise de conformidade clínica..."})
                         
                         full_query = (
-                            f"Analise a seguinte transcrição de consulta médica e realize uma auditoria de conformidade "
-                            f"baseada nas normas do CFM, RDCs e critérios de qualidade do AMORZITO:\n\n{transcribed_text}"
+                            "Com base na transcrição abaixo, realize as seguintes tarefas:\n"
+                            "1. Estruture o texto nos campos: ANAMNESE, CONDUTA, HIPÓTESE DIAGNÓSTICA e CID-10.\n"
+                            "2. Realize uma auditoria de conformidade clínica baseada nas normas do CFM e RDCs, "
+                            "verificando se os campos estruturados atendem aos critérios de qualidade do AMORZITO.\n\n"
+                            f"Transcrição:\n{transcribed_text}"
                         )
 
                         full_response = ""
