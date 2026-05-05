@@ -31,6 +31,7 @@ jobs:
         run: |
           uv run pytest
         env:
+          PYTHONPATH: .
           # Mock environment variables for tests
           OPENAI_API_KEY: "sk-test-123"
           AGENTE_API_KEY: "test-secret"
