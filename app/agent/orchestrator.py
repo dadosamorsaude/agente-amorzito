@@ -6,6 +6,8 @@ from langgraph.prebuilt import create_react_agent
 from app.services.llm import get_chat_model_claude
 from app.tools.athena import query_athena_tool, athena_results_context
 from app.tools.rag import search_medical_compliance_tool, search_sop_tool, rag_results_context
+from app.tools.transcription import transcribe_audio_tool
+from app.tools.performance import analyze_clinical_performance_tool
 from app.services.memory import get_session_history
 from app.services.validator import validate_response
 from app.utils.dates import get_dates
@@ -29,6 +31,7 @@ To ensure your responses are based on official evidence and protocols:
 1. **CFM & Regulations**: For any questions regarding CFM (Conselho Federal de Medicina) guidelines, medical ethics, record-keeping standards (anamnese, conduta, etc.), quality criteria, or **calculation of quality indicators (like IQRC)**, you MUST first use the `search_medical_compliance_tool` to validate current rules before querying the database.
 2. **Standard Operating Procedures (POP)**: For questions about operational workflows, internal protocols, or creating/reviewing POPs, you MUST use the `search_sop_tool`.
 3. **Internal Data**: Use `query_athena_tool` for patient data and specific medical records stored in the database.
+4. **Audio Analysis**: Use `transcribe_audio_tool` if the user provides a filename of a recording to analyze clinical conversations or dictations.
 
 ## Database Schema (AWS Athena)
 When querying medical records, use the following information:
@@ -141,6 +144,8 @@ async def run_agent(user_id: str, message: str, stream: bool = False):
         query_athena_tool,
         search_medical_compliance_tool,
         search_sop_tool,
+        transcribe_audio_tool,
+        analyze_clinical_performance_tool,
     ]
     dates = get_dates()
     system_prompt = _build_system_prompt(dates)
