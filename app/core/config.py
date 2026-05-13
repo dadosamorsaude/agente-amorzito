@@ -5,7 +5,7 @@ from typing import Optional
 class Settings(BaseSettings):
     # LLM Settings
     OPENAI_API_KEY: str
-    MODEL_NAME: str = "gpt-5.4"
+    MODEL_NAME: str = "gpt-5.5"
     TEMPERATURE: float = 0.0
 
     ANTHROPIC_API_KEY: str

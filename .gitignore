@@ -5,6 +5,7 @@ criar_index_pinecone.py
 chunking-normas.py
 chunking-regras.py
 chunking-rdc.py
+chunking-catarata.py
 *.html
 
 # Python-generated files

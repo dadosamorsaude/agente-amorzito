@@ -88,7 +88,7 @@ async def save_evaluation(
             "interpretacao_clinica": evaluation.get("interpretacao_clinica", 0),
             "aplicacao_normativa": evaluation.get("aplicacao_normativa", 0),
         },
-        "model": evaluation.get("model", "gpt-5.0"),
+        "model": evaluation.get("model", settings.MODEL_NAME),
     }
 
     if settings.DATABASE_URL:
