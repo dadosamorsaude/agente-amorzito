@@ -8,8 +8,11 @@ class PerformanceAuditSkill:
     """
     Skill para Auditoria de Performance Clínica em Lote.
     Analisa múltiplos prontuários e gera indicadores de qualidade agregados.
+
+    Modelo: gpt-4.1 (via settings.MODEL_NAME) — temperatura 0, saída JSON
+    estruturada com checklist CFM/RDC. Execução paralela via asyncio.gather().
     """
-    
+
     def __init__(self):
         self.llm = get_chat_model_openai(temperature=0)
 

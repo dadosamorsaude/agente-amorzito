@@ -5,7 +5,8 @@ from typing import Optional
 class Settings(BaseSettings):
     # LLM Settings
     OPENAI_API_KEY: str
-    MODEL_NAME: str = "gpt-5.5"
+    MODEL_NAME: str = "gpt-4.1"          # Avaliador (LLM-as-Judge) + Auditoria de Performance
+    MODEL_NAME_SQL: str = "gpt-4.1-mini" # Gerador de SQL Athena (tarefa determinística e bem-definida)
     TEMPERATURE: float = 0.0
 
     ANTHROPIC_API_KEY: str

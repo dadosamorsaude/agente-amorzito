@@ -1,5 +1,6 @@
 from langchain_core.prompts import ChatPromptTemplate
 from app.services.llm import get_chat_model_openai
+from app.core.config import settings
 import re
 
 
@@ -37,7 +38,7 @@ def _clean_sql(sql: str) -> str:
 
 
 def generate_sql(message: str, hoje: str, ontem: str) -> str:
-    llm = get_chat_model_openai(temperature=0.0)
+    llm = get_chat_model_openai(temperature=0.0, model=settings.MODEL_NAME_SQL)
 
     prompt = ChatPromptTemplate.from_messages(
         [
