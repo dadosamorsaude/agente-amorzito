@@ -3,7 +3,7 @@ import logging
 from typing import Any
 from langchain_core.messages import HumanMessage
 from langgraph.prebuilt import create_react_agent
-from app.services.llm import get_chat_model_claude
+from app.services.llm import get_chat_model_openai
 from app.tools.athena import query_athena_tool, athena_results_context
 from app.tools.rag import search_medical_compliance_tool, search_sop_tool, rag_results_context
 from app.tools.transcription import transcribe_audio_tool
@@ -111,6 +111,7 @@ async def _run_evaluation_background(
     final_response: str,
     raw_data: list,
     rag_data: list,
+    chat_history: str = "",
 ) -> None:
     """Executa a avaliação em background sem bloquear a resposta ao usuário."""
     try:
@@ -118,7 +119,7 @@ async def _run_evaluation_background(
             f"Avaliador iniciado em background | user_id={user_id} "
             f"| queries_athena={len(raw_data)} | queries_rag={len(rag_data)}"
         )
-        evaluation = await evaluate_response(message, final_response, raw_data, rag_data)
+        evaluation = await evaluate_response(message, final_response, raw_data, rag_data, chat_history)
         await save_evaluation(user_id, message, final_response, raw_data, evaluation)
     except Exception:
         logger.exception("Erro no pipeline de avaliação em background")
@@ -140,7 +141,7 @@ async def run_agent(user_id: str, message: str, stream: bool = False):
     athena_results_context.set([])
     rag_results_context.set([])
 
-    llm = get_chat_model_claude()
+    llm = get_chat_model_openai()
     tools = [
         query_athena_tool,
         search_medical_compliance_tool,
@@ -203,8 +204,10 @@ async def run_agent(user_id: str, message: str, stream: bool = False):
                 raw_data = athena_results_context.get([])
                 rag_data = rag_results_context.get([])
                 if (raw_data or rag_data) and final_response:
+                    # Formata o histórico para o avaliador
+                    history_str = "\n".join([f"{type(m).__name__}: {m.content}" for m in recent_messages])
                     asyncio.create_task(
-                        _run_evaluation_background(user_id, message, final_response, raw_data, rag_data)
+                        _run_evaluation_background(user_id, message, final_response, raw_data, rag_data, history_str)
                     )
 
             except asyncio.CancelledError:
@@ -229,8 +232,10 @@ async def run_agent(user_id: str, message: str, stream: bool = False):
             raw_data = athena_results_context.get([])
             rag_data = rag_results_context.get([])
             if (raw_data or rag_data) and final_response:
+                # Formata o histórico para o avaliador
+                history_str = "\n".join([f"{type(m).__name__}: {m.content}" for m in recent_messages])
                 asyncio.create_task(
-                    _run_evaluation_background(user_id, message, final_response, raw_data, rag_data)
+                    _run_evaluation_background(user_id, message, final_response, raw_data, rag_data, history_str)
                 )
 
             yield final_response

@@ -32,7 +32,7 @@ class PineconeSemanticCache:
             if result.matches and result.matches[0].score >= threshold:
                 score_str = f"{result.matches[0].score:.4f}"
                 logger.info(f"🟢 Semantic Cache HIT! (Similaridade: {score_str})")
-                return result.matches[0].metadata.get("response")
+                return result.matches[0].metadata
             
             logger.info("🟡 Semantic Cache MISS")
             return None
@@ -40,17 +40,22 @@ class PineconeSemanticCache:
             logger.error(f"Erro no cache semantico (get): {e}")
             return None
             
-    async def set(self, query: str, response: str):
+    async def set(self, query: str, response: str, athena_data: list = None, rag_data: list = None):
         if not self.enabled: return
         try:
             vector = await self.embeddings.aembed_query(query)
-            # Salvamos a query original apenas para metadados/auditoria
+            metadata = {
+                "query": query, 
+                "response": response,
+                "athena_data": json.dumps(athena_data or []),
+                "rag_data": json.dumps(rag_data or [])
+            }
             self.index.upsert(vectors=[{
                 "id": str(uuid.uuid4()),
                 "values": vector,
-                "metadata": {"query": query, "response": response}
+                "metadata": metadata
             }])
-            logger.info("🔵 Semantic Cache atualizado com a nova resposta.")
+            logger.info("🔵 Semantic Cache atualizado com a nova resposta e metadados.")
         except Exception as e:
             logger.error(f"Erro no cache semantico (set): {e}")
 

@@ -5,10 +5,13 @@ from fastapi import APIRouter, HTTPException, Security
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from app.agent.orchestrator import run_agent
+from app.agent.orchestrator import run_agent, _run_evaluation_background
 from app.api.security import get_api_key
 from app.core.logger import logger
 from app.services.cache import semantic_cache
+from app.services.memory import get_session_history
+from app.tools.athena import athena_results_context
+from app.tools.rag import rag_results_context
 from fastapi import BackgroundTasks
 
 router = APIRouter()
@@ -44,11 +47,29 @@ async def chat(
 
     if req.stream:
         async def event_generator() -> AsyncGenerator[str, None]:
-            # Se deu HIT no cache, entrega de uma vez no stream
+            # Se deu HIT no cache, entrega e aciona evaluator
             if cached_response:
-                payload = {"text": cached_response}
+                text = cached_response.get("response")
+                payload = {"text": text}
                 yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
                 yield "data: [DONE]\n\n"
+                
+                # Dispara o Evaluator mesmo sendo Cache
+                try:
+                    athena_data = json.loads(cached_response.get("athena_data", "[]"))
+                    rag_data = json.loads(cached_response.get("rag_data", "[]"))
+                    
+                    # Recupera memória para o avaliador
+                    history = get_session_history(req.user_id)
+                    recent_messages = list(history.messages)[-10:]
+                    history_str = "\n".join([f"{type(m).__name__}: {m.content}" for m in recent_messages])
+                    
+                    background_tasks.add_task(
+                        _run_evaluation_background, 
+                        req.user_id, req.message, text, athena_data, rag_data, history_str
+                    )
+                except Exception as e:
+                    logger.error(f"Erro ao disparar evaluator no cache hit (stream): {e}")
                 return
                 
             try:
@@ -64,8 +85,13 @@ async def chat(
                 yield "data: [DONE]\n\n"
 
                 if full_stream_response and not full_stream_response.startswith("Erro técnico:"):
-                    # Dispara salvamento em background para não travar a resposta
-                    background_tasks.add_task(semantic_cache.set, req.message, full_stream_response)
+                    # Captura dados brutos para o cache
+                    raw_athena = athena_results_context.get([])
+                    raw_rag = rag_results_context.get([])
+                    background_tasks.add_task(
+                        semantic_cache.set, 
+                        req.message, full_stream_response, raw_athena, raw_rag
+                    )
 
             except Exception as e:
                 logger.exception("Streaming error")
@@ -84,10 +110,28 @@ async def chat(
 
     # Tratamento quando stream=False
     try:
-        # Se HIT no cache, não roda o run_agent
+        # Se HIT no cache, entrega e aciona evaluator
         if cached_response:
+            text = cached_response.get("response")
+            # Dispara o Evaluator
+            try:
+                athena_data = json.loads(cached_response.get("athena_data", "[]"))
+                rag_data = json.loads(cached_response.get("rag_data", "[]"))
+                
+                # Recupera memória para o avaliador
+                history = get_session_history(req.user_id)
+                recent_messages = list(history.messages)[-10:]
+                history_str = "\n".join([f"{type(m).__name__}: {m.content}" for m in recent_messages])
+                
+                background_tasks.add_task(
+                    _run_evaluation_background, 
+                    req.user_id, req.message, text, athena_data, rag_data, history_str
+                )
+            except Exception as e:
+                logger.error(f"Erro ao disparar evaluator no cache hit: {e}")
+
             return ChatResponse(
-                response=cached_response,
+                response=text,
                 status="success",
                 error=None,
             )
@@ -112,7 +156,13 @@ async def chat(
                 error=full_response,
             )
             
-        background_tasks.add_task(semantic_cache.set, req.message, full_response)
+        # Captura dados brutos para o cache
+        raw_athena = athena_results_context.get([])
+        raw_rag = rag_results_context.get([])
+        background_tasks.add_task(
+            semantic_cache.set, 
+            req.message, full_response, raw_athena, raw_rag
+        )
 
         return ChatResponse(
             response=full_response,

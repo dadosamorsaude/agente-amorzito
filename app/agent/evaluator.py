@@ -66,6 +66,9 @@ EVALUATOR_USER_TEMPLATE = """
 ## Resposta do Agente (AMORZITO):
 {agent_response}
 
+## Histórico da Conversa (Memória):
+{chat_history}
+
 ## Avalie e responda APENAS em JSON:
 {{
   "score": <inteiro 0-100>,
@@ -98,6 +101,7 @@ async def evaluate_response(
     agent_response: str,
     raw_athena_data: list[dict],
     rag_context: list[dict] | None = None,
+    chat_history: str = "",
 ) -> dict:
     """
     Avalia a acurácia da resposta do AMORZITO considerando:
@@ -137,6 +141,7 @@ async def evaluate_response(
         rag_context=rag_context_str,
         user_question=user_question,
         agent_response=agent_response,
+        chat_history=chat_history or "Nenhum histórico anterior.",
     )
 
     try:
