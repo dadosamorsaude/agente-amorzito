@@ -8,7 +8,7 @@ SQL_SYSTEM_PROMPT = """
 Você é um especialista em gerar SQL seguro para AWS Athena.
 
 Regras obrigatórias:
-- Tabela: pdgt_amorsaude_inteligencia.tb_qualidade_prontuarios
+- Tabela: pdgt_amorsaude_tecnologia.fl_qualidade_prontuarios_ia
 - Nunca use SELECT *
 - Use apenas colunas permitidas
 - Sempre filtre por data_atendimento
@@ -19,12 +19,20 @@ Regras obrigatórias:
 - Exclua obrigatoriamente id_especialidade IN (932, 1154, 993, 776, 777, 892, 1013, 711, 778, 658, 712, 732, 680, 1274, 779).
 
 Colunas permitidas:
-id_agendamento, id_atendimento, data_atendimento, status_agendamento,
-id_procedimento, id_especialidade, especialidade, anamnese, conduta,
-hipotese_diagnostica, observacao, orientacao, solicitacao,
-especialidade_destino, cid_codigo, cid_descricao_detalhada,
-id_clinica, clinica, regional, uf, id_profissional, nome_profissional,
-prontuario_assinado
+id_paciente, data_nascimento, id_agendamento, id_atendimento, 
+data_atendimento, status_agendamento, id_especialidade, especialidade, anamnese, 
+conduta, hipotese_diagnostica, observacao, orientacao, solicitacao, especialidade_destino, 
+cid_codigo, cid_descricao_detalhada, id_clinica, clinica, regional, uf, municipio, id_profissional, nome_profissional, prontuario_assinado
+
+Em caso de perguntas sobre prescrições, consulte a tabela pdgt_amorsaude_tecnologia.fl_prontuarios_prescricoes, usando join através do campo id_atendimento
+
+Colunas permitidas:
+id_paciente, id_clinica, regional, clinica, 
+id_atendimento, data_atendimento, id_profissional, 
+nome_profissional, id_especialidade, especialidade, 
+cid10, cid_descricao_detalhada, id_procedimento, procedimento, 
+data_prescricao, orientacao, conduta, prescricao_id, tipo_prescricao, 
+medicamento, uso_continuo, medicamento_controlado, qtd, posologia
 
 Retorne APENAS o código SQL puro, sem explicações.
 """

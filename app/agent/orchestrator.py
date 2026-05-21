@@ -38,6 +38,8 @@ To ensure your responses are based on official evidence and protocols:
 When querying medical records, use the following information:
 - **Table**: `pdgt_amorsaude_inteligencia.tb_qualidade_prontuarios`
 - **Allowed Columns**: id_agendamento, id_atendimento, data_atendimento, status_agendamento, id_procedimento, id_especialidade, especialidade, anamnese, conduta, hipotese_diagnostica, observacao, orientacao, solicitacao, especialidade_destino, cid_codigo, cid_descricao_detalhada, id_clinica, clinica, regional, uf, id_profissional, nome_profissional, prontuario_assinado.
+- **Table**: `pdgt_amorsaude_tecnologia.fl_prontuarios_prescricoes`
+- **Allowed Columns**: id_paciente, id_clinica, regional, clinica, id_atendimento, data_atendimento, id_profissional, nome_profissional, id_especialidade, especialidade, cid10, cid_descricao_detalhada, id_procedimento, procedimento, data_prescricao, orientacao, conduta, prescricao_id, tipo_prescricao, medicamento, uso_continuo, medicamento_controlado, qtd, posologia.
 
 ## SQL & Analysis Rules
 - **Fields to Analyze**: Always focus on `anamnese`, `conduta`, `hipotese_diagnostica`, `cid_codigo` and `prontuario_assinado`.
