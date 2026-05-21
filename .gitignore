@@ -7,6 +7,7 @@ chunking-regras.py
 chunking-rdc.py
 chunking-catarata.py
 *.html
+tests
 
 # Python-generated files
 __pycache__/
