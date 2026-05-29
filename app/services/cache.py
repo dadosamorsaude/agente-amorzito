@@ -1,10 +1,13 @@
-from pinecone import Pinecone
-from langchain_openai import OpenAIEmbeddings
-from app.core.config import settings
-import logging
-import uuid
+import hashlib
 import json
+import logging
 import time
+import uuid
+
+from langchain_openai import OpenAIEmbeddings
+from pinecone import Pinecone
+
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -12,6 +15,16 @@ CACHE_TTL_DAYS = 7
 DEFAULT_THRESHOLD = 0.90
 HIGH_THRESHOLD = 0.97
 MIN_RESPONSE_LENGTH = 20
+
+# Schema version: bump when tables/columns change in the system prompt
+CACHE_SCHEMA_VERSION = hashlib.md5(
+    "fl_qualidade_prontuarios_ia:"
+    "id_paciente,data_nascimento,id_agendamento,id_atendimento,data_atendimento,"
+    "status_agendamento,id_especialidade,especialidade,anamnese,conduta,"
+    "hipotese_diagnostica,observacao,orientacao,solicitacao,especialidade_destino,"
+    "cid_codigo,cid_descricao_detalhada,id_clinica,clinica,regional,uf,municipio,"
+    "id_profissional,nome_profissional,prontuario_assinado".encode()
+).hexdigest()
 
 
 class PineconeSemanticCache:
@@ -46,6 +59,12 @@ class PineconeSemanticCache:
                     continue
 
                 meta = match.metadata
+
+                # Valida versão do schema
+                if meta.get("schema_version") != CACHE_SCHEMA_VERSION:
+                    logger.info(f"Cache ignorado: versão do schema mudou | score={match.score:.4f}")
+                    continue
+
                 created_at = float(meta.get("created_at", 0))
                 age_days = (time.time() - created_at) / 86400 if created_at else 0
 
@@ -88,6 +107,7 @@ class PineconeSemanticCache:
                 "rag_data": json.dumps(rag_data or []),
                 "user_id": user_id,
                 "created_at": str(time.time()),
+                "schema_version": CACHE_SCHEMA_VERSION,
             }
             self.index.upsert(vectors=[{
                 "id": str(uuid.uuid4()),
@@ -99,7 +119,6 @@ class PineconeSemanticCache:
             logger.error(f"Erro no cache semantico (set): {e}")
 
     async def invalidate_by_score(self, query: str, user_id: str = ""):
-        """Remove entradas de cache com score baixo na avaliação."""
         if not self.enabled:
             return
         try:
@@ -116,6 +135,15 @@ class PineconeSemanticCache:
                 logger.info(f"Cache invalidado: {len(ids_to_delete)} entrada(s) removida(s)")
         except Exception as e:
             logger.error(f"Erro ao invalidar cache: {e}")
+
+    async def clear_all(self):
+        if not self.enabled:
+            return
+        try:
+            self.index.delete(delete_all=True)
+            logger.info("Cache limpo completamente")
+        except Exception as e:
+            logger.error(f"Erro ao limpar cache: {e}")
 
 
 semantic_cache = PineconeSemanticCache()
