@@ -94,8 +94,12 @@ async def chat_voice(
             },
         )
 
+    except HTTPException:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        raise
     except Exception as e:
         logger.error(f"Erro no processamento de voz: {e}")
         if os.path.exists(temp_path):
             os.remove(temp_path)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Erro interno no processamento de voz.")
