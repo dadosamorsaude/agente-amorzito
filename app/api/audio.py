@@ -1,4 +1,6 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Security
+from app.api.security import get_api_key
+from app.utils.audio import validate_audio_file
 from app.core.logger import logger
 import os
 import uuid
@@ -12,16 +14,14 @@ if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
 @router.post("/upload")
-async def upload_audio(file: UploadFile = File(...)):
+async def upload_audio(
+    file: UploadFile = File(...),
+    api_key: str = Security(get_api_key),
+):
     """
     Recebe um arquivo de áudio e salva temporariamente para transcrição.
     """
-    # Validação simples de extensão
-    allowed_extensions = [".mp3", ".wav", ".m4a", ".ogg", ".webm"]
-    ext = os.path.splitext(file.filename)[1].lower()
-    
-    if ext not in allowed_extensions:
-        raise HTTPException(status_code=400, detail=f"Extensão não permitida: {ext}")
+    ext = await validate_audio_file(file)
 
     # Gera um nome único para o arquivo
     unique_filename = f"{uuid.uuid4()}{ext}"

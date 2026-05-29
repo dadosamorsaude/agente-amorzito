@@ -11,6 +11,7 @@ import logging
 from datetime import datetime
 
 import psycopg
+from psycopg import AsyncConnection
 
 from app.core.config import settings
 
@@ -42,19 +43,19 @@ INSERT_SQL = """
 INSERT INTO evaluation_logs
     (user_id, created_at, question, response, raw_data, score, approved, errors, justification, breakdown, model)
 VALUES
-    (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+    ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);
 """
 
 
-def _ensure_table(conn: psycopg.Connection) -> None:
+async def _ensure_table(conn: AsyncConnection) -> None:
     """Cria a tabela se não existir (executado uma vez por processo)."""
     global _table_created
     if _table_created:
         return
     try:
-        with conn.cursor() as cur:
-            cur.execute(CREATE_TABLE_SQL)
-        conn.commit()
+        async with conn.cursor() as cur:
+            await cur.execute(CREATE_TABLE_SQL)
+        await conn.commit()
         _table_created = True
         logger.info("Tabela 'evaluation_logs' verificada/criada com sucesso.")
     except Exception as e:
@@ -93,28 +94,28 @@ async def save_evaluation(
 
     if settings.DATABASE_URL:
         try:
-            conn = psycopg.connect(settings.DATABASE_URL, prepare_threshold=None)
-            _ensure_table(conn)
+            async with await AsyncConnection.connect(settings.DATABASE_URL) as conn:
+                await _ensure_table(conn)
 
-            with conn.cursor() as cur:
-                cur.execute(
-                    INSERT_SQL,
-                    (
-                        record["user_id"],
-                        record["created_at"],
-                        record["question"],
-                        record["response"],
-                        json.dumps(record["raw_data"], default=str),
-                        record["score"],
-                        record["approved"],
-                        json.dumps(record["errors"]),
-                        record["justification"],
-                        json.dumps(record["breakdown"]),
-                        record["model"],
-                    ),
-                )
-            conn.commit()
-            conn.close()
+                async with conn.cursor() as cur:
+                    await cur.execute(
+                        INSERT_SQL,
+                        (
+                            record["user_id"],
+                            record["created_at"],
+                            record["question"],
+                            record["response"],
+                            json.dumps(record["raw_data"], default=str),
+                            record["score"],
+                            record["approved"],
+                            json.dumps(record["errors"]),
+                            record["justification"],
+                            json.dumps(record["breakdown"]),
+                            record["model"],
+                        ),
+                    )
+                await conn.commit()
+
             logger.info(f"Avaliação salva no PostgreSQL | score={record['score']}")
             return
         except Exception as e:
@@ -129,49 +130,46 @@ async def get_evaluation_summary() -> dict:
     """Retorna o resumo agregado de todas as avaliações."""
     if settings.DATABASE_URL:
         try:
-            conn = psycopg.connect(settings.DATABASE_URL, prepare_threshold=None)
-            _ensure_table(conn)
+            async with await AsyncConnection.connect(settings.DATABASE_URL) as conn:
+                await _ensure_table(conn)
 
-            with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT
-                        COUNT(*)                            AS total,
-                        ROUND(AVG(score)::numeric, 1)       AS avg_score,
-                        ROUND(
-                            100.0 * SUM(CASE WHEN approved THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0),
-                            1
-                        )                                   AS approved_rate,
-                        ROUND(
-                            AVG(score) FILTER (
-                                WHERE created_at >= NOW() - INTERVAL '7 days'
-                            )::numeric, 1
-                        )                                   AS avg_score_7d
-                    FROM evaluation_logs;
-                """)
-                row = cur.fetchone()
+                async with conn.cursor() as cur:
+                    await cur.execute("""
+                        SELECT
+                            COUNT(*)                            AS total,
+                            ROUND(AVG(score)::numeric, 1)       AS avg_score,
+                            ROUND(
+                                100.0 * SUM(CASE WHEN approved THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0),
+                                1
+                            )                                   AS approved_rate,
+                            ROUND(
+                                AVG(score) FILTER (
+                                    WHERE created_at >= NOW() - INTERVAL '7 days'
+                                )::numeric, 1
+                            )                                   AS avg_score_7d
+                        FROM evaluation_logs;
+                    """)
+                    row = await cur.fetchone()
 
-                # Erros mais comuns (últimas 50 avaliações)
-                cur.execute("""
-                    SELECT elem
-                    FROM evaluation_logs,
-                         jsonb_array_elements_text(errors) AS elem
-                    WHERE approved = false
-                    ORDER BY created_at DESC
-                    LIMIT 50;
-                """)
-                error_rows = cur.fetchall()
+                    await cur.execute("""
+                        SELECT elem
+                        FROM evaluation_logs,
+                             jsonb_array_elements_text(errors) AS elem
+                        WHERE approved = false
+                        ORDER BY created_at DESC
+                        LIMIT 50;
+                    """)
+                    error_rows = await cur.fetchall()
 
-            conn.close()
+                common_errors = _top_errors([r[0] for r in error_rows])
 
-            common_errors = _top_errors([r[0] for r in error_rows])
-
-            return {
-                "total_evaluations": row[0] or 0,
-                "avg_score": float(row[1]) if row[1] else 0.0,
-                "approved_rate": float(row[2]) if row[2] else 0.0,
-                "avg_score_last_7d": float(row[3]) if row[3] else 0.0,
-                "common_errors": common_errors,
-            }
+                return {
+                    "total_evaluations": row[0] or 0,
+                    "avg_score": float(row[1]) if row[1] else 0.0,
+                    "approved_rate": float(row[2]) if row[2] else 0.0,
+                    "avg_score_last_7d": float(row[3]) if row[3] else 0.0,
+                    "common_errors": common_errors,
+                }
         except Exception as e:
             logger.error(f"Erro ao buscar resumo do PostgreSQL: {e}")
 
@@ -183,23 +181,22 @@ async def get_evaluation_history(limit: int = 20) -> list[dict]:
     """Retorna as últimas avaliações."""
     if settings.DATABASE_URL:
         try:
-            conn = psycopg.connect(settings.DATABASE_URL, prepare_threshold=None)
-            _ensure_table(conn)
+            async with await AsyncConnection.connect(settings.DATABASE_URL) as conn:
+                await _ensure_table(conn)
 
-            with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT id, user_id, created_at, question, score, approved,
-                           errors, justification, breakdown
-                    FROM evaluation_logs
-                    ORDER BY created_at DESC
-                    LIMIT %s;
-                """, (limit,))
-                rows = cur.fetchall()
-                cols = ["id", "user_id", "created_at", "question", "score",
-                        "approved", "errors", "justification", "breakdown"]
+                async with conn.cursor() as cur:
+                    await cur.execute("""
+                        SELECT id, user_id, created_at, question, score, approved,
+                               errors, justification, breakdown
+                        FROM evaluation_logs
+                        ORDER BY created_at DESC
+                        LIMIT $1;
+                    """, (limit,))
+                    rows = await cur.fetchall()
+                    cols = ["id", "user_id", "created_at", "question", "score",
+                            "approved", "errors", "justification", "breakdown"]
 
-            conn.close()
-            return [dict(zip(cols, r)) for r in rows]
+                return [dict(zip(cols, r)) for r in rows]
         except Exception as e:
             logger.error(f"Erro ao buscar histórico do PostgreSQL: {e}")
 
