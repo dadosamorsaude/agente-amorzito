@@ -11,7 +11,7 @@ def test_generate_sql_quality_table():
     ontem = "2026-05-20"
     
     mock_response = AIMessage(
-        content="SELECT COUNT(*) FROM pdgt_amorsaude_tecnologia.fl_qualidade_prontuarios_ia WHERE regional = 'BH' AND prontuario_assinado = 'Não' AND date(data_atendimento) >= DATE '2026-05-20' AND date(data_atendimento) < DATE '2026-05-21'"
+        content="SELECT COUNT(*) FROM pdgt_amorsaude_tecnologia.fl_qualidade_prontuarios_ia WHERE LOWER(regional) = 'bh' AND prontuario_assinado = 0 AND date(data_atendimento) >= DATE '2026-05-20' AND date(data_atendimento) < DATE '2026-05-21'"
     )
     
     mock_llm = MagicMock()
@@ -41,7 +41,7 @@ def test_generate_sql_quality_table():
         assert "pdgt_amorsaude_tecnologia.fl_qualidade_prontuarios_ia" in system_msg
         assert "tb_qualidade_prontuarios" not in system_msg
         assert "fl_prontuarios_prescricoes" in system_msg
-        assert "join através do campo id_atendimento" in system_msg
+        assert "id_atendimento" in system_msg
         
         # Assertions on human message formatting
         assert "2026-05-20" in human_msg
@@ -91,4 +91,4 @@ def test_orchestrator_system_prompt():
     assert "pdgt_amorsaude_tecnologia.fl_prontuarios_prescricoes" in prompt
     assert "prescricao_id" in prompt
     assert "posologia" in prompt
-    assert "tb_qualidade_prontuarios" in prompt
+    assert "fl_qualidade_prontuarios_ia" in prompt

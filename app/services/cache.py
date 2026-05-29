@@ -4,8 +4,15 @@ from app.core.config import settings
 import logging
 import uuid
 import json
+import time
 
 logger = logging.getLogger(__name__)
+
+CACHE_TTL_DAYS = 7
+DEFAULT_THRESHOLD = 0.90
+HIGH_THRESHOLD = 0.97
+MIN_RESPONSE_LENGTH = 20
+
 
 class PineconeSemanticCache:
     def __init__(self):
@@ -22,42 +29,93 @@ class PineconeSemanticCache:
             except Exception as e:
                 logger.error(f"Erro ao inicializar PineconeSemanticCache: {e}")
                 self.enabled = False
-            
-    async def get(self, query: str, threshold: float = 0.95):
-        if not self.enabled: return None
+
+    async def get(self, query: str, user_id: str = "", threshold: float = DEFAULT_THRESHOLD):
+        if not self.enabled:
+            return None
         try:
             vector = await self.embeddings.aembed_query(query)
-            result = self.index.query(vector=vector, top_k=1, include_metadata=True)
-            
-            if result.matches and result.matches[0].score >= threshold:
-                score_str = f"{result.matches[0].score:.4f}"
-                logger.info(f"🟢 Semantic Cache HIT! (Similaridade: {score_str})")
-                return result.matches[0].metadata
-            
-            logger.info("🟡 Semantic Cache MISS")
+            result = self.index.query(vector=vector, top_k=3, include_metadata=True)
+
+            if not result.matches:
+                logger.info("Semantic Cache MISS")
+                return None
+
+            for match in result.matches:
+                if match.score < threshold:
+                    continue
+
+                meta = match.metadata
+                created_at = float(meta.get("created_at", 0))
+                age_days = (time.time() - created_at) / 86400 if created_at else 0
+
+                if age_days > CACHE_TTL_DAYS:
+                    logger.info(f"Cache expirado (TTL) | score={match.score:.4f} | idade={age_days:.1f}d")
+                    continue
+
+                response = meta.get("response", "")
+                if len(response.strip()) < MIN_RESPONSE_LENGTH:
+                    logger.info(f"Cache ignorado: resposta muito curta | score={match.score:.4f}")
+                    continue
+
+                logger.info(f"Cache HIT | score={match.score:.4f} | idade={age_days:.1f}d")
+                return meta
+
+            logger.info("Semantic Cache MISS (nenhum match válido)")
             return None
         except Exception as e:
             logger.error(f"Erro no cache semantico (get): {e}")
             return None
-            
-    async def set(self, query: str, response: str, athena_data: list = None, rag_data: list = None):
-        if not self.enabled: return
+
+    async def set(self, query: str, response: str, athena_data: list = None, rag_data: list = None, user_id: str = ""):
+        if not self.enabled:
+            return
+
+        if len(response.strip()) < MIN_RESPONSE_LENGTH:
+            logger.info(f"Cache: resposta muito curta, não armazenando")
+            return
+
+        if response.startswith("Erro técnico:") or response.startswith("Erro:"):
+            logger.info(f"Cache: resposta de erro, não armazenando")
+            return
+
         try:
             vector = await self.embeddings.aembed_query(query)
             metadata = {
-                "query": query, 
+                "query": query,
                 "response": response,
                 "athena_data": json.dumps(athena_data or []),
-                "rag_data": json.dumps(rag_data or [])
+                "rag_data": json.dumps(rag_data or []),
+                "user_id": user_id,
+                "created_at": str(time.time()),
             }
             self.index.upsert(vectors=[{
                 "id": str(uuid.uuid4()),
                 "values": vector,
-                "metadata": metadata
+                "metadata": metadata,
             }])
-            logger.info("🔵 Semantic Cache atualizado com a nova resposta e metadados.")
+            logger.info(f"Cache atualizado | user_id={user_id}")
         except Exception as e:
             logger.error(f"Erro no cache semantico (set): {e}")
 
-# Instância global do cache
+    async def invalidate_by_score(self, query: str, user_id: str = ""):
+        """Remove entradas de cache com score baixo na avaliação."""
+        if not self.enabled:
+            return
+        try:
+            vector = await self.embeddings.aembed_query(query)
+            result = self.index.query(vector=vector, top_k=5, include_metadata=True)
+            ids_to_delete = []
+            for match in result.matches:
+                if match.score > HIGH_THRESHOLD:
+                    meta = match.metadata
+                    if not user_id or meta.get("user_id") == user_id:
+                        ids_to_delete.append(match.id)
+            if ids_to_delete:
+                self.index.delete(ids=ids_to_delete)
+                logger.info(f"Cache invalidado: {len(ids_to_delete)} entrada(s) removida(s)")
+        except Exception as e:
+            logger.error(f"Erro ao invalidar cache: {e}")
+
+
 semantic_cache = PineconeSemanticCache()

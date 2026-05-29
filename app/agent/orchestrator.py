@@ -14,6 +14,7 @@ from app.services.validator import validate_response
 from app.utils.dates import get_dates
 from app.agent.evaluator import evaluate_response
 from app.services.evaluation_store import save_evaluation
+from app.services.cache import semantic_cache
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +128,11 @@ async def _run_evaluation_background(
         )
         evaluation = await evaluate_response(message, final_response, raw_data, rag_data, chat_history)
         await save_evaluation(user_id, message, final_response, raw_data, evaluation)
+
+        score = evaluation.get("score", 0)
+        if score < 70:
+            await semantic_cache.invalidate_by_score(message, user_id)
+            logger.info(f"Cache invalidado por score baixo: {score}")
     except Exception:
         logger.exception("Erro no pipeline de avaliação em background")
 

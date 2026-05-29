@@ -45,7 +45,7 @@ async def chat(
     logger.info(f"Received chat request | user_id: {req.user_id} | stream: {req.stream}")
 
     # 1. Verifica no Cache Semântico
-    cached_response = await semantic_cache.get(req.message)
+    cached_response = await semantic_cache.get(req.message, user_id=req.user_id)
 
     # Registra trace do cache hit/miss
     if cached_response:
@@ -95,8 +95,8 @@ async def chat(
                     raw_athena = athena_results_context.get([])
                     raw_rag = rag_results_context.get([])
                     background_tasks.add_task(
-                        semantic_cache.set, 
-                        req.message, full_stream_response, raw_athena, raw_rag
+                        semantic_cache.set,
+                        req.message, full_stream_response, raw_athena, raw_rag, req.user_id
                     )
 
             except Exception as e:
@@ -166,8 +166,8 @@ async def chat(
         raw_athena = athena_results_context.get([])
         raw_rag = rag_results_context.get([])
         background_tasks.add_task(
-            semantic_cache.set, 
-            req.message, full_response, raw_athena, raw_rag
+            semantic_cache.set,
+            req.message, full_response, raw_athena, raw_rag, req.user_id
         )
 
         return ChatResponse(
