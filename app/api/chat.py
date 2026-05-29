@@ -71,8 +71,8 @@ async def chat(
                     history_str = "\n".join([f"{type(m).__name__}: {m.content}" for m in recent_messages])
                     
                     background_tasks.add_task(
-                        _run_evaluation_background, 
-                        req.user_id, req.message, text, athena_data, rag_data, history_str
+                        _run_evaluation_background,
+                        req.user_id, req.message, text, athena_data, rag_data, history_str, True
                     )
                 except Exception as e:
                     logger.error(f"Erro ao disparar evaluator no cache hit (stream): {e}")
@@ -130,8 +130,8 @@ async def chat(
                 history_str = "\n".join([f"{type(m).__name__}: {m.content}" for m in recent_messages])
                 
                 background_tasks.add_task(
-                    _run_evaluation_background, 
-                    req.user_id, req.message, text, athena_data, rag_data, history_str
+                    _run_evaluation_background,
+                    req.user_id, req.message, text, athena_data, rag_data, history_str, True
                 )
             except Exception as e:
                 logger.error(f"Erro ao disparar evaluator no cache hit: {e}")

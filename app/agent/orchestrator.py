@@ -116,8 +116,9 @@ async def _run_evaluation_background(
     raw_data: list,
     rag_data: list,
     chat_history: str = "",
+    was_cache_hit: bool = False,
 ) -> None:
-    """Executa a avaliação em background sem bloquear a resposta ao usuário."""
+    """Executa a avaliação em background. Se cache hit com score baixo, refaz a consulta."""
     try:
         logger.info(
             f"Avaliador iniciado em background | user_id={user_id} "
@@ -130,6 +131,18 @@ async def _run_evaluation_background(
         if score < 70:
             await semantic_cache.invalidate_by_score(message, user_id)
             logger.info(f"Cache invalidado por score baixo: {score}")
+
+            if was_cache_hit:
+                logger.info(f"Cache com score baixo ({score}) — refazendo consulta...")
+                new_response = ""
+                async for chunk in run_agent(user_id, message, stream=False):
+                    if chunk:
+                        new_response += chunk
+                if new_response and not new_response.startswith("Erro técnico:"):
+                    raw_athena = athena_results_context.get([])
+                    raw_rag = rag_results_context.get([])
+                    await semantic_cache.set(message, new_response, raw_athena, raw_rag, user_id)
+                    logger.info("Cache atualizado com nova resposta após retry")
     except Exception:
         logger.exception("Erro no pipeline de avaliação em background")
 
@@ -246,14 +259,25 @@ async def run_agent(user_id: str, message: str, stream: bool = False):
                 validation = validate_response(response_text)
                 final_response = validation.output
 
+            # Retry automático em caso de erro técnico
+            if final_response.startswith("Erro técnico:"):
+                logger.warning("Resposta com erro técnico — refazendo consulta...")
+                result = await agent.ainvoke({"messages": input_messages}, config=config)
+                messages = result.get("messages", [])
+                if messages:
+                    response_text = extract_text_from_content(messages[-1].content)
+                    validation = validate_response(response_text)
+                    new_response = validation.output
+                    if not new_response.startswith("Erro técnico:"):
+                        final_response = new_response
+                        logger.info("Retry bem-sucedido")
+
             history.add_user_message(message)
             history.add_ai_message(final_response)
 
-            # Dispara avaliação em background (sem bloquear a resposta)
             raw_data = athena_results_context.get([])
             rag_data = rag_results_context.get([])
             if (raw_data or rag_data) and final_response:
-                # Formata o histórico para o avaliador
                 history_str = "\n".join([f"{type(m).__name__}: {m.content}" for m in recent_messages])
                 asyncio.create_task(
                     _run_evaluation_background(user_id, message, final_response, raw_data, rag_data, history_str)
