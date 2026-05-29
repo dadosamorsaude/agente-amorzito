@@ -192,10 +192,13 @@ async def run_agent(user_id: str, message: str, stream: bool = False):
 
         # Limita o contexto às últimas 10 conversas para economizar tokens lidos pelo LLM
         recent_messages = list(history.messages)[-10:]
-        # Remove `name` de AIMessages do histórico (OpenAI não aceita name em role assistant)
+        # OpenAI rejeita `name` em mensagens de role assistant/user/system.
+        # Remove `name` de todas as mensagens do histórico (pode vir de versões anteriores
+        # que usavam `create_react_agent(name="Agente Amorzito")`).
         for m in recent_messages:
-            if isinstance(m, AIMessage) and m.name is not None:
+            if hasattr(m, 'name'):
                 m.name = None
+            m.additional_kwargs.pop('name', None)
         input_messages = recent_messages + [HumanMessage(content=message)]
 
         config = {
