@@ -26,6 +26,12 @@ wheels/
 .vscode/
 .idea/
 
+# Cache de testes
+.pytest_cache/
+
+# Áudios temporários enviados por usuários
+temp_audios/
+
 # Temporary and Data folders
 scratch/
 rag/
