@@ -23,7 +23,13 @@ CACHE_SCHEMA_VERSION = hashlib.md5(
     "status_agendamento,id_especialidade,especialidade,anamnese,conduta,"
     "hipotese_diagnostica,observacao,orientacao,solicitacao,especialidade_destino,"
     "cid_codigo,cid_descricao_detalhada,id_clinica,clinica,regional,uf,municipio,"
-    "id_profissional,nome_profissional,prontuario_assinado".encode()
+    "id_profissional,nome_profissional,prontuario_assinado|"
+    "fl_prontuarios_prescricoes:"
+    "id_paciente,id_clinica,regional,clinica,id_atendimento,data_atendimento,"
+    "id_profissional,nome_profissional,id_especialidade,especialidade,cid10,"
+    "cid_descricao_detalhada,id_procedimento,procedimento,data_prescricao,orientacao,"
+    "conduta,prescricao_id,tipo_prescricao,medicamento,uso_continuo,"
+    "medicamento_controlado,qtd,posologia".encode()
 ).hexdigest()
 
 

@@ -51,5 +51,8 @@ def test_orchestrator_system_prompt():
     """Verify that the orchestrator's system prompt includes the newly configured tables and schemas."""
     dates = {"hoje": "2026-05-21", "ontem": "2026-05-20"}
     prompt = _build_system_prompt(dates)
-    
+
     assert "fl_qualidade_prontuarios_ia" in prompt
+    assert "fl_prontuarios_prescricoes" in prompt
+    assert "medicamento" in prompt
+    assert "id_atendimento" in prompt

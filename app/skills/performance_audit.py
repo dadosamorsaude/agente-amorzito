@@ -22,7 +22,6 @@ class PerformanceAuditSkill:
             env = os.getenv("RENDER", "development")
             self.llm = get_chat_model_openai(
                 temperature=0,
-                run_name="performance_audit_llm",
                 metadata={"skill": "performance_audit", "environment": env},
             )
         return self.llm
