@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from typing import Any
 from langchain_core.messages import HumanMessage
 from langgraph.prebuilt import create_react_agent
@@ -143,7 +144,16 @@ async def run_agent(user_id: str, message: str, stream: bool = False):
     athena_results_context.set([])
     rag_results_context.set([])
 
-    llm = get_chat_model_openai()
+    env = os.getenv("RENDER", "development")
+    tracing_metadata = {
+        "user_id": user_id,
+        "environment": env,
+    }
+
+    llm = get_chat_model_openai(
+        run_name="amorzito_agent_llm",
+        metadata=tracing_metadata,
+    )
     tools = [
         query_athena_tool,
         search_medical_compliance_tool,
@@ -160,6 +170,7 @@ async def run_agent(user_id: str, message: str, stream: bool = False):
             model=llm,
             tools=tools,
             prompt=system_prompt,
+            name="Agente Amorzito",
         )
 
         # Limita o contexto às últimas 10 conversas para economizar tokens lidos pelo LLM
@@ -169,6 +180,8 @@ async def run_agent(user_id: str, message: str, stream: bool = False):
         config = {
             "configurable": {"thread_id": user_id},
             "run_name": "Agente Amorzito",
+            "metadata": tracing_metadata,
+            "tags": [env, "agent"],
         }
 
         if stream:

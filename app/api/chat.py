@@ -1,9 +1,11 @@
 import json
+import os
 from typing import AsyncGenerator, Optional
 
 from fastapi import APIRouter, HTTPException, Security
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from langsmith import traceable
 
 from app.agent.orchestrator import run_agent, _run_evaluation_background
 from app.api.security import get_api_key
@@ -44,6 +46,10 @@ async def chat(
 
     # 1. Verifica no Cache Semântico
     cached_response = await semantic_cache.get(req.message)
+
+    # Registra trace do cache hit/miss
+    if cached_response:
+        _record_cache_hit(req.user_id, req.message)
 
     if req.stream:
         async def event_generator() -> AsyncGenerator[str, None]:
@@ -173,3 +179,8 @@ async def chat(
     except Exception as e:
         logger.exception("Error in /chat")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@traceable(name="cache_hit", run_type="chain")
+def _record_cache_hit(user_id: str, query: str) -> None:
+    logger.info(f"Cache hit | user_id={user_id} | query={query[:50]}...")

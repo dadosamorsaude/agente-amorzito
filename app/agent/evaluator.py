@@ -3,8 +3,6 @@ Agente Avaliador de Acurácia — LLM-as-Judge
 
 Compara a resposta do AMORZITO com os dados brutos retornados pelo Athena,
 gerando um score de 0-100 com justificativa detalhada dos erros encontrados.
-
-Modelo: GPT-5.4 (robusto para análise estruturada em background)
 """
 
 import json
@@ -12,6 +10,7 @@ import logging
 from datetime import datetime
 
 from langchain_openai import ChatOpenAI
+from langsmith import traceable
 
 from app.core.config import settings
 
@@ -87,15 +86,17 @@ EVALUATOR_USER_TEMPLATE = """
 # Avaliador Principal
 # ──────────────────────────────────────────────────────────────────────────────
 
+@traceable(name="evaluator_llm")
 def _get_evaluator_llm() -> ChatOpenAI:
-    """Retorna o LLM avaliador (conforme MODEL_NAME configurado, temperatura 0 para consistência)."""
     return ChatOpenAI(
         model=settings.MODEL_NAME,
         temperature=0.0,
         api_key=settings.OPENAI_API_KEY,
+        run_name="evaluator_llm",
     )
 
 
+@traceable(name="evaluate_response", run_type="chain")
 async def evaluate_response(
     user_question: str,
     agent_response: str,
@@ -103,20 +104,7 @@ async def evaluate_response(
     rag_context: list[dict] | None = None,
     chat_history: str = "",
 ) -> dict:
-    """
-    Avalia a acurácia da resposta do AMORZITO considerando:
-    - Dados brutos do Athena (dados quantitativos)
-    - Contexto normativo do RAG (CFM / POPs) usado na interpretação
-
-    Args:
-        user_question: A pergunta original do usuário.
-        agent_response: A resposta gerada pelo AMORZITO.
-        raw_athena_data: Lista de dicts com {sql, results} capturados durante a execução.
-        rag_context: Lista de dicts com {source, query, chunks} do RAG (opcional).
-
-    Returns:
-        Dict com score, breakdown, erros e justificativa.
-    """
+    """Avalia a acurácia da resposta do AMORZITO via LLM-as-Judge."""
     if not raw_athena_data and not rag_context:
         logger.warning("Avaliador: nenhum dado bruto do Athena nem RAG disponível.")
         return _empty_evaluation("Nenhum dado do Athena ou RAG disponível para avaliar.")
