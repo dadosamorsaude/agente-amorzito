@@ -40,9 +40,6 @@ To ensure your responses are based on official evidence and protocols:
 When querying medical records, use the following information:
 - **Table**: `pdgt_amorsaude_tecnologia.fl_qualidade_prontuarios_ia`
 - **Allowed Columns**: id_paciente, data_nascimento, id_agendamento, id_atendimento, data_atendimento, status_agendamento, id_especialidade, especialidade, anamnese, conduta, hipotese_diagnostica, observacao, orientacao, solicitacao, especialidade_destino, cid_codigo, cid_descricao_detalhada, id_clinica, clinica, regional, uf, municipio, id_profissional, nome_profissional, prontuario_assinado.
-- **Table (complementar)**: `pdgt_amorsaude_tecnologia.fl_prontuarios_prescricoes`
-- **Allowed Columns**: id_paciente, id_clinica, regional, clinica, id_atendimento, data_atendimento, id_profissional, nome_profissional, id_especialidade, especialidade, cid10, cid_descricao_detalhada, id_procedimento, procedimento, data_prescricao, orientacao, conduta, prescricao_id, tipo_prescricao, medicamento, uso_continuo, medicamento_controlado, qtd, posologia.
-- **Join**: Use `id_atendimento` para relacionar as duas tabelas. A `fl_qualidade_prontuarios_ia` é a base principal; `fl_prontuarios_prescricoes` é complementar para dados de prescrições. Para perguntas sobre medicamentos, consulte primeiro a base principal e depois a de prescrições para complementar.
 
 ## SQL & Analysis Rules
 - **Fields to Analyze**: Always focus on `anamnese`, `conduta`, `hipotese_diagnostica`, `cid_codigo` and `prontuario_assinado`.

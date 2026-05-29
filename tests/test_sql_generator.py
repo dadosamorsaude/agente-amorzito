@@ -53,6 +53,3 @@ def test_orchestrator_system_prompt():
     prompt = _build_system_prompt(dates)
 
     assert "fl_qualidade_prontuarios_ia" in prompt
-    assert "fl_prontuarios_prescricoes" in prompt
-    assert "medicamento" in prompt
-    assert "id_atendimento" in prompt
