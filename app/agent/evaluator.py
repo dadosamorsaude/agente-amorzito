@@ -88,12 +88,13 @@ EVALUATOR_USER_TEMPLATE = """
 
 @traceable(name="evaluator_llm")
 def _get_evaluator_llm() -> ChatOpenAI:
-    return ChatOpenAI(
+    llm = ChatOpenAI(
         model=settings.MODEL_NAME,
         temperature=0.0,
         api_key=settings.OPENAI_API_KEY,
-        run_name="evaluator_llm",
     )
+    llm.langsmith_extra = {"run_name": "evaluator_llm"}
+    return llm
 
 
 @traceable(name="evaluate_response", run_type="chain")

@@ -40,9 +40,6 @@ def test_generate_sql_quality_table():
         # Assertions on the prompt content to verify it contains the updated rules and new table
         assert "pdgt_amorsaude_tecnologia.fl_qualidade_prontuarios_ia" in system_msg
         assert "tb_qualidade_prontuarios" not in system_msg
-        assert "fl_prontuarios_prescricoes" in system_msg
-        assert "id_atendimento" in system_msg
-        
         # Assertions on human message formatting
         assert "2026-05-20" in human_msg
         assert "2026-05-21" in human_msg
@@ -50,45 +47,9 @@ def test_generate_sql_quality_table():
         # Assertions on the output
         assert sql == mock_response.content
 
-def test_generate_sql_prescriptions_join():
-    """Verify that the prompt contains prescription joining instructions."""
-    message = "Quais medicamentos foram prescritos ontem?"
-    hoje = "2026-05-21"
-    ontem = "2026-05-20"
-    
-    mock_response = AIMessage(
-        content="SELECT p.medicamento FROM pdgt_amorsaude_tecnologia.fl_qualidade_prontuarios_ia q JOIN pdgt_amorsaude_tecnologia.fl_prontuarios_prescricoes p ON q.id_atendimento = p.id_atendimento"
-    )
-    
-    mock_llm = MagicMock()
-    mock_llm.invoke.return_value = mock_response
-    mock_llm.return_value = mock_response  # In case it is called directly
-    
-    with patch("app.services.sql_generator.get_chat_model_openai", return_value=mock_llm) as mock_get_model:
-        sql = generate_sql(message, hoje=hoje, ontem=ontem)
-        
-        if mock_llm.invoke.called:
-            called_args, called_kwargs = mock_llm.invoke.call_args
-        else:
-            called_args, called_kwargs = mock_llm.call_args
-            
-        messages = called_args[0].to_messages()
-        system_msg = messages[0].content
-        
-        # Verify instructions are in the prompt
-        assert "fl_prontuarios_prescricoes" in system_msg
-        assert "id_atendimento" in system_msg
-        
-        # Assertions on the clean sql output
-        assert sql == mock_response.content
-
 def test_orchestrator_system_prompt():
     """Verify that the orchestrator's system prompt includes the newly configured tables and schemas."""
     dates = {"hoje": "2026-05-21", "ontem": "2026-05-20"}
     prompt = _build_system_prompt(dates)
     
-    # Assertions for table structures and columns in the orchestrator
-    assert "pdgt_amorsaude_tecnologia.fl_prontuarios_prescricoes" in prompt
-    assert "prescricao_id" in prompt
-    assert "posologia" in prompt
     assert "fl_qualidade_prontuarios_ia" in prompt
