@@ -2,7 +2,7 @@ import asyncio
 import logging
 import os
 from typing import Any
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.prebuilt import create_react_agent
 from app.services.llm import get_chat_model_openai
 from app.tools.athena import query_athena_tool, athena_results_context
@@ -188,11 +188,14 @@ async def run_agent(user_id: str, message: str, stream: bool = False):
             model=llm,
             tools=tools,
             prompt=system_prompt,
-            name="Agente Amorzito",
         )
 
         # Limita o contexto às últimas 10 conversas para economizar tokens lidos pelo LLM
         recent_messages = list(history.messages)[-10:]
+        # Remove `name` de AIMessages do histórico (OpenAI não aceita name em role assistant)
+        for m in recent_messages:
+            if isinstance(m, AIMessage) and m.name is not None:
+                m.name = None
         input_messages = recent_messages + [HumanMessage(content=message)]
 
         config = {
