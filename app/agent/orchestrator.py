@@ -46,7 +46,7 @@ When querying medical records, use the following information:
 
 ## SQL & Analysis Rules
 - **Fields to Analyze for Quality**: Always focus on `anamnese`, `conduta`, `hipotese_diagnostica`, `cid_codigo` and `prontuario_assinado`.
-- **Prescription Details**: To find prescription information, search in `orientacao`, `solicitacao` and `observacao`. These fields are NOT part of the IQRC calculation.
+- **Prescription Details**: To find prescription information, search in ALL textual fields: `anamnese`, `conduta`, `hipotese_diagnostica`, `orientacao`, `solicitacao`, and `observacao`. However, only the original 5 fields are part of the IQRC calculation.
 - **Quality Logic (IQRC)**: A record is only considered compliant (IQRC success) if `anamnese`, `conduta`, `hipotese_diagnostica`, `cid_codigo`, AND `prontuario_assinado` are all valid/signed.
 - **Text Validation**: Fields filled with "xxx", "--", "ok", "NA", ".....", or generic text are considered **NOT filled**.
 - **Signed Status**: A record is signed only if `prontuario_assinado` = 1.
