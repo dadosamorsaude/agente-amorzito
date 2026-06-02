@@ -26,7 +26,7 @@ async def athena_agent_tool(query: str, config: RunnableConfig) -> str:
     agent = create_react_agent(
         model=llm, 
         tools=[query_athena_tool],
-        prompt="Você é um especialista em SQL para o AWS Athena. Retorne as informações pedidas."
+        prompt="Você é um especialista em SQL para o AWS Athena. Retorne as informações pedidas. Responda SEMPRE em Português do Brasil."
     )
     child_config = {**config, "run_name": "Athena SQL Agent"}
     result = await agent.ainvoke({"messages": [HumanMessage(content=query)]}, config=child_config)
@@ -44,7 +44,7 @@ async def compliance_agent_tool(query: str, config: RunnableConfig) -> str:
     agent = create_react_agent(
         model=llm, 
         tools=[search_medical_compliance_tool, search_sop_tool],
-        prompt="Você é um especialista em normas médicas e auditoria. Utilize suas ferramentas para buscar informações e repassá-las."
+        prompt="Você é um especialista em normas médicas e auditoria. Utilize suas ferramentas para buscar informações e repassá-las. Responda SEMPRE em Português do Brasil."
     )
     child_config = {**config, "run_name": "Compliance RAG Agent"}
     result = await agent.ainvoke({"messages": [HumanMessage(content=query)]}, config=child_config)
@@ -62,7 +62,7 @@ async def audio_agent_tool(query: str, config: RunnableConfig) -> str:
     agent = create_react_agent(
         model=llm, 
         tools=[transcribe_audio_tool],
-        prompt="Você transcreve e estrutura ditados médicos."
+        prompt="Você transcreve e estrutura ditados médicos. Responda SEMPRE em Português do Brasil."
     )
     child_config = {**config, "run_name": "Audio Transcription Agent"}
     result = await agent.ainvoke({"messages": [HumanMessage(content=query)]}, config=child_config)
@@ -80,7 +80,7 @@ async def performance_agent_tool(query: str, config: RunnableConfig) -> str:
     agent = create_react_agent(
         model=llm, 
         tools=[analyze_clinical_performance_tool],
-        prompt="Você analisa relatórios de desempenho e métricas de auditoria."
+        prompt="Você analisa relatórios de desempenho e métricas de auditoria. Responda SEMPRE em Português do Brasil."
     )
     child_config = {**config, "run_name": "Clinical Performance Agent"}
     result = await agent.ainvoke({"messages": [HumanMessage(content=query)]}, config=child_config)
