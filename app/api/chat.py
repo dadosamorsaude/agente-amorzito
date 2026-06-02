@@ -5,12 +5,10 @@ from typing import AsyncGenerator, Optional
 from fastapi import APIRouter, HTTPException, Security
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from langsmith import traceable
 
 from app.agent.orchestrator import run_agent, _run_evaluation_background
 from app.api.security import get_api_key
 from app.core.logger import logger
-from app.services.cache import semantic_cache
 from app.services.memory import get_session_history
 from app.tools.athena import athena_results_context
 from app.tools.rag import rag_results_context
@@ -44,46 +42,14 @@ async def chat(
     """
     logger.info(f"Received chat request | user_id: {req.user_id} | stream: {req.stream}")
 
-    # 1. Verifica no Cache Semântico
-    cached_response = await semantic_cache.get(req.message, user_id=req.user_id)
-
-    # Registra trace do cache hit/miss
-    if cached_response:
-        _record_cache_hit(req.user_id, req.message)
-
     if req.stream:
         async def event_generator() -> AsyncGenerator[str, None]:
-            # Se deu HIT no cache, entrega e aciona evaluator
-            if cached_response:
-                text = cached_response.get("response")
-                payload = {"text": text}
-                yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
-                yield "data: [DONE]\n\n"
-                
-                # Dispara o Evaluator mesmo sendo Cache
-                try:
-                    athena_data = json.loads(cached_response.get("athena_data", "[]"))
-                    rag_data = json.loads(cached_response.get("rag_data", "[]"))
-                    
-                    # Recupera memória para o avaliador
-                    history = get_session_history(req.user_id)
-                    recent_messages = list(history.messages)[-10:]
-                    history_str = "\n".join([f"{type(m).__name__}: {m.content}" for m in recent_messages])
-                    
-                    background_tasks.add_task(
-                        _run_evaluation_background,
-                        req.user_id, req.message, text, athena_data, rag_data, history_str, True
-                    )
-                except Exception as e:
-                    logger.error(f"Erro ao disparar evaluator no cache hit (stream): {e}")
-                return
-                
             try:
                 full_stream_response = ""
                 async for chunk in run_agent(req.user_id, req.message, stream=True):
                     if not chunk:
                         continue
-                    
+
                     full_stream_response += chunk
                     payload = {"text": chunk}
                     yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
@@ -91,12 +57,16 @@ async def chat(
                 yield "data: [DONE]\n\n"
 
                 if full_stream_response and not full_stream_response.startswith("Erro técnico:"):
-                    # Captura dados brutos para o cache
                     raw_athena = athena_results_context.get([])
                     raw_rag = rag_results_context.get([])
+
+                    history = get_session_history(req.user_id)
+                    recent_messages = list(history.messages)[-10:]
+                    history_str = "\n".join([f"{type(m).__name__}: {m.content}" for m in recent_messages])
+
                     background_tasks.add_task(
-                        semantic_cache.set,
-                        req.message, full_stream_response, raw_athena, raw_rag, req.user_id
+                        _run_evaluation_background,
+                        req.user_id, req.message, full_stream_response, raw_athena, raw_rag, history_str
                     )
 
             except Exception as e:
@@ -116,32 +86,6 @@ async def chat(
 
     # Tratamento quando stream=False
     try:
-        # Se HIT no cache, entrega e aciona evaluator
-        if cached_response:
-            text = cached_response.get("response")
-            # Dispara o Evaluator
-            try:
-                athena_data = json.loads(cached_response.get("athena_data", "[]"))
-                rag_data = json.loads(cached_response.get("rag_data", "[]"))
-                
-                # Recupera memória para o avaliador
-                history = get_session_history(req.user_id)
-                recent_messages = list(history.messages)[-10:]
-                history_str = "\n".join([f"{type(m).__name__}: {m.content}" for m in recent_messages])
-                
-                background_tasks.add_task(
-                    _run_evaluation_background,
-                    req.user_id, req.message, text, athena_data, rag_data, history_str, True
-                )
-            except Exception as e:
-                logger.error(f"Erro ao disparar evaluator no cache hit: {e}")
-
-            return ChatResponse(
-                response=text,
-                status="success",
-                error=None,
-            )
-
         full_response = ""
 
         async for chunk in run_agent(req.user_id, req.message, stream=False):
@@ -161,13 +105,17 @@ async def chat(
                 status="error",
                 error=full_response,
             )
-            
-        # Captura dados brutos para o cache
+
         raw_athena = athena_results_context.get([])
         raw_rag = rag_results_context.get([])
+
+        history = get_session_history(req.user_id)
+        recent_messages = list(history.messages)[-10:]
+        history_str = "\n".join([f"{type(m).__name__}: {m.content}" for m in recent_messages])
+
         background_tasks.add_task(
-            semantic_cache.set,
-            req.message, full_response, raw_athena, raw_rag, req.user_id
+            _run_evaluation_background,
+            req.user_id, req.message, full_response, raw_athena, raw_rag, history_str
         )
 
         return ChatResponse(
@@ -179,8 +127,3 @@ async def chat(
     except Exception as e:
         logger.exception("Error in /chat")
         raise HTTPException(status_code=500, detail=str(e))
-
-
-@traceable(name="cache_hit", run_type="chain")
-def _record_cache_hit(user_id: str, query: str) -> None:
-    logger.info(f"Cache hit | user_id={user_id} | query={query[:50]}...")

@@ -28,8 +28,6 @@ class Settings(BaseSettings):
     PINECONE_API_KEY: Optional[str] = None
     PINECONE_INDEX_CFM: str
     PINECONE_INDEX_POP: str
-    PINECONE_INDEX_CACHE: str
-
     # Security
     AGENTE_API_KEY: str
     ALLOWED_ORIGINS: str

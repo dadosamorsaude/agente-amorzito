@@ -14,7 +14,6 @@ from app.services.validator import validate_response
 from app.utils.dates import get_dates
 from app.agent.evaluator import evaluate_response
 from app.services.evaluation_store import save_evaluation
-from app.services.cache import semantic_cache
 
 logger = logging.getLogger(__name__)
 
@@ -115,9 +114,8 @@ async def _run_evaluation_background(
     raw_data: list,
     rag_data: list,
     chat_history: str = "",
-    was_cache_hit: bool = False,
 ) -> None:
-    """Executa a avaliação em background. Se cache hit com score baixo, refaz a consulta."""
+    """Executa a avaliação em background."""
     try:
         logger.info(
             f"Avaliador iniciado em background | user_id={user_id} "
@@ -125,23 +123,6 @@ async def _run_evaluation_background(
         )
         evaluation = await evaluate_response(message, final_response, raw_data, rag_data, chat_history)
         await save_evaluation(user_id, message, final_response, raw_data, evaluation)
-
-        score = evaluation.get("score", 0)
-        if score < 70:
-            await semantic_cache.invalidate_by_score(message, user_id)
-            logger.info(f"Cache invalidado por score baixo: {score}")
-
-            if was_cache_hit:
-                logger.info(f"Cache com score baixo ({score}) — refazendo consulta...")
-                new_response = ""
-                async for chunk in run_agent(user_id, message, stream=False):
-                    if chunk:
-                        new_response += chunk
-                if new_response and not new_response.startswith("Erro técnico:"):
-                    raw_athena = athena_results_context.get([])
-                    raw_rag = rag_results_context.get([])
-                    await semantic_cache.set(message, new_response, raw_athena, raw_rag, user_id)
-                    logger.info("Cache atualizado com nova resposta após retry")
     except Exception:
         logger.exception("Erro no pipeline de avaliação em background")
 
