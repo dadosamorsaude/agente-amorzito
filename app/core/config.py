@@ -15,7 +15,13 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str
     MODEL_CLAUDE: str =  "claude-sonnet-4-6"
     TEMPERATURE_CLAUDE: float = 0.4
-
+    
+    # Modelos Específicos por Agente
+    MODEL_ORCHESTRATOR: str = "claude-sonnet-4-6"
+    MODEL_ATHENA: str = "gpt-5.4-mini"
+    MODEL_COMPLIANCE: str = "gpt-5.4-mini"
+    MODEL_AUDIO: str = "gpt-5.4-mini"
+    MODEL_PERFORMANCE: str = "gpt-5.5"
 
     # AWS / Athena Settings
     AWS_ACCESS_KEY_ID: str
@@ -28,6 +34,7 @@ class Settings(BaseSettings):
     PINECONE_API_KEY: Optional[str] = None
     PINECONE_INDEX_CFM: str
     PINECONE_INDEX_POP: str
+    
     # Security
     AGENTE_API_KEY: str
     ALLOWED_ORIGINS: str

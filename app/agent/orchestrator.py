@@ -4,11 +4,16 @@ import os
 from typing import Any
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.prebuilt import create_react_agent
-from app.services.llm import get_chat_model_openai
-from app.tools.athena import query_athena_tool, athena_results_context
-from app.tools.rag import search_medical_compliance_tool, search_sop_tool, rag_results_context
-from app.tools.transcription import transcribe_audio_tool
-from app.tools.performance import analyze_clinical_performance_tool
+from app.core.config import settings
+from app.services.llm import get_chat_model_claude
+from app.tools.athena import athena_results_context
+from app.tools.rag import rag_results_context
+from app.agent.workers import (
+    athena_agent_tool,
+    compliance_agent_tool,
+    audio_agent_tool,
+    performance_agent_tool
+)
 from app.services.memory import get_session_history
 from app.services.validator import validate_response
 from app.utils.dates import get_dates
@@ -29,11 +34,10 @@ Always respond in Brazilian Portuguese.
 
 ## Guidelines for Quality & Compliance (RAG)
 To ensure your responses are based on official evidence and protocols:
-1. **CFM & Regulations**: For any questions regarding CFM (Conselho Federal de Medicina) guidelines, medical ethics, record-keeping standards (anamnese, conduta, etc.), quality criteria, or **calculation of quality indicators (like IQRC)**, you MUST first use the `search_medical_compliance_tool` to validate current rules before querying the database.
-2. **Standard Operating Procedures (POP)**: For questions about operational workflows, internal protocols, or creating/reviewing POPs, you MUST use the `search_sop_tool`.
-3. **Internal Data**: Use `query_athena_tool` for specific patient records or direct database queries.
-4. **Clinical Performance & Audit**: If asked about general quality, performance reports, or compliance trends, use `analyze_clinical_performance_tool`. Combine its quantitative metrics (compliance rate, common failures) with your detailed qualitative analysis.
-5. **Audio Analysis (Auxiliar Médico)**: Use `transcribe_audio_tool` for clinical dictations. Always structure these as: ANAMNESE, CONDUTA, HIPÓTESE, CID-10 before auditing.
+1. **CFM & Regulations / SOPs**: For any questions regarding guidelines, medical ethics, POPs, quality criteria, or **calculation of quality indicators (like IQRC)**, you MUST use the `compliance_agent_tool`.
+2. **Internal Data**: Use `athena_agent_tool` for specific patient records, prescriptions, or direct database queries.
+3. **Clinical Performance & Audit**: If asked about general quality, performance reports, or compliance trends, use `performance_agent_tool`.
+4. **Audio Analysis (Auxiliar Médico)**: Use `audio_agent_tool` for clinical dictations. Always structure these as: ANAMNESE, CONDUTA, HIPÓTESE, CID-10 before auditing.
 
 ## Database Schema (AWS Athena)
 When querying medical records, use the following information:
@@ -41,7 +45,8 @@ When querying medical records, use the following information:
 - **Allowed Columns**: id_paciente, data_nascimento, id_agendamento, id_atendimento, data_atendimento, status_agendamento, id_especialidade, especialidade, anamnese, conduta, hipotese_diagnostica, observacao, orientacao, solicitacao, especialidade_destino, cid_codigo, cid_descricao_detalhada, id_clinica, clinica, regional, uf, municipio, id_profissional, nome_profissional, prontuario_assinado.
 
 ## SQL & Analysis Rules
-- **Fields to Analyze**: Always focus on `anamnese`, `conduta`, `hipotese_diagnostica`, `cid_codigo` and `prontuario_assinado`.
+- **Fields to Analyze for Quality**: Always focus on `anamnese`, `conduta`, `hipotese_diagnostica`, `cid_codigo` and `prontuario_assinado`.
+- **Prescription Details**: To find prescription information, search in `orientacao`, `solicitacao` and `observacao`. These fields are NOT part of the IQRC calculation.
 - **Quality Logic (IQRC)**: A record is only considered compliant (IQRC success) if `anamnese`, `conduta`, `hipotese_diagnostica`, `cid_codigo`, AND `prontuario_assinado` are all valid/signed.
 - **Text Validation**: Fields filled with "xxx", "--", "ok", "NA", ".....", or generic text are considered **NOT filled**.
 - **Signed Status**: A record is signed only if `prontuario_assinado` = 1.
@@ -149,13 +154,12 @@ async def run_agent(user_id: str, message: str, stream: bool = False):
         "environment": env,
     }
 
-    llm = get_chat_model_openai(metadata=tracing_metadata)
+    llm = get_chat_model_claude(model=settings.MODEL_ORCHESTRATOR, metadata=tracing_metadata)
     tools = [
-        query_athena_tool,
-        search_medical_compliance_tool,
-        search_sop_tool,
-        transcribe_audio_tool,
-        analyze_clinical_performance_tool,
+        athena_agent_tool,
+        compliance_agent_tool,
+        audio_agent_tool,
+        performance_agent_tool,
     ]
     dates = get_dates()
     system_prompt = _build_system_prompt(dates)

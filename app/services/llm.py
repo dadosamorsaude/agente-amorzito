@@ -18,10 +18,11 @@ def get_chat_model_openai(
 
 def get_chat_model_claude(
     temperature: float = None,
+    model: str = None,
     metadata: dict = None,
 ):
     return ChatAnthropic(
-        model=settings.MODEL_CLAUDE,
+        model=model if model is not None else settings.MODEL_CLAUDE,
         temperature=temperature if temperature is not None else settings.TEMPERATURE_CLAUDE,
         api_key=settings.ANTHROPIC_API_KEY,
         metadata=metadata or {},
