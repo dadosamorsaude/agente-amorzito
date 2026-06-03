@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     MODEL_COMPLIANCE: str = "gpt-5.4-mini"
     MODEL_AUDIO: str = "gpt-5.4-mini"
     MODEL_PERFORMANCE: str = "gpt-5.5"
+    MODEL_HAS: str = "gpt-5.4-mini"
 
     # AWS / Athena Settings
     AWS_ACCESS_KEY_ID: str

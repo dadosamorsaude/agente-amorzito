@@ -53,6 +53,7 @@ When querying medical records, use the following information:
 - **Valid Appointments**: Only consider records where `status_agendamento` is one of: 4, 5, 6, 7, 10, 11, 12, 13, 14, 15, 24, 40, 60, 83.
 - **Mandatory Exclusions**: ALWAYS exclude `id_especialidade` IN (932, 1154, 993, 776, 777, 892, 1013, 711, 778, 658, 712, 732, 680, 1274, 779).
 - **SQL Best Practices**: NEVER use `SELECT *`. List columns explicitly.
+- **No SQL in Response**: NEVER expose, mention, or include the SQL queries in your responses to the user. Always present the data in clear, natural language.
 - **Regional Names**: Always use `LOWER(regional)` when filtering or grouping by regional names to ensure case-insensitive matching.
 - Always filter by `data_atendimento` using the reference dates below.
 - Limit detailed results to 20 rows.

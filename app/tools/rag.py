@@ -1,4 +1,5 @@
 from contextvars import ContextVar
+import os
 from pinecone import Pinecone
 from langchain_pinecone import PineconeVectorStore
 from langchain_openai import OpenAIEmbeddings
@@ -7,6 +8,12 @@ from langsmith import traceable
 from app.core.config import settings
 
 rag_results_context: ContextVar[list] = ContextVar("rag_results", default=[])
+
+NAMESPACE_CFM = os.getenv("PINECONE_NAMESPACE_CFM")
+NAMESPACE_REGRAS = os.getenv("PINECONE_NAMESPACE_REGRAS")
+NAMESPACE_RDC = os.getenv("PINECONE_NAMESPACE_RDC")
+NAMESPACE_HIPERTENSAO = os.getenv("PINECONE_NAMESPACE_HIPERTENSAO")
+INDEX_HIPERTENSAO = os.getenv("PINECONE_INDEX_HAS")
 
 
 def get_retriever(index_name: str, namespace: str = "", k: int = 5):
@@ -51,6 +58,14 @@ def get_compliance_retriever(namespace: str, k: int = 5):
 def get_pop_retriever(namespace: str = "", k: int = 5):
     return get_retriever(
         index_name=settings.PINECONE_INDEX_POP,
+        namespace=namespace,
+        k=k
+    )
+
+
+def get_hipertensao_retriever(namespace: str = NAMESPACE_HIPERTENSAO, k: int = 5):
+    return get_retriever(
+        index_name=INDEX_HIPERTENSAO,
         namespace=namespace,
         k=k
     )
@@ -114,12 +129,12 @@ def search_medical_compliance_tool(query: str) -> str:
     """
 
     retriever_cfm = get_compliance_retriever(
-        namespace="cfm_2153_2016",
+        namespace=NAMESPACE_CFM,
         k=4
     )
 
     retriever_regras = get_compliance_retriever(
-        namespace="regras_negocio_prontuario",
+        namespace=NAMESPACE_REGRAS,
         k=4
     )
 
@@ -137,14 +152,14 @@ def search_medical_compliance_tool(query: str) -> str:
         captured + [
             {
                 "source": "CFM",
-                "namespace": "cfm_2153_2016",
+                "namespace": NAMESPACE_CFM,
                 "query": query,
                 "chunks": [d.page_content for d in docs_cfm],
                 "metadata": [d.metadata for d in docs_cfm],
             },
             {
                 "source": "Regras de Negócio",
-                "namespace": "regras_negocio_prontuario",
+                "namespace": NAMESPACE_REGRAS,
                 "query": query,
                 "chunks": [d.page_content for d in docs_regras],
                 "metadata": [d.metadata for d in docs_regras],
@@ -168,7 +183,7 @@ def search_sop_tool(query: str) -> str:
     """
 
     retriever_pop = get_pop_retriever(namespace="", k=4)
-    retriever_rdc = get_pop_retriever(namespace="rdc_anvisa", k=4)
+    retriever_rdc = get_pop_retriever(namespace=NAMESPACE_RDC, k=4)
 
     if not retriever_pop or not retriever_rdc:
         return "Erro ao configurar buscador de POPs."
@@ -201,3 +216,38 @@ def search_sop_tool(query: str) -> str:
         return "Nenhum POP ou RDC de base encontrado."
 
     return format_docs(all_docs)
+
+
+@tool
+@traceable(name="search_clinic_has")
+def search_clinic_has(query: str) -> str:
+    """
+    OBRIGATÓRIO: Use esta ferramenta para buscar informações sobre identificação, 
+    clusterização, classificação de risco, e protocolo clínico de pacientes hipertensos (HAS).
+    """
+
+    retriever = get_hipertensao_retriever(namespace=NAMESPACE_HIPERTENSAO, k=5)
+
+    if not retriever:
+        return "Erro ao configurar buscador de hipertensão."
+
+    docs = retriever.invoke(query)
+
+    captured = rag_results_context.get([])
+
+    rag_results_context.set(
+        captured + [
+            {
+                "source": "Protocolo Clínico Hipertensão",
+                "namespace": NAMESPACE_HIPERTENSAO,
+                "query": query,
+                "chunks": [d.page_content for d in docs],
+                "metadata": [d.metadata for d in docs],
+            }
+        ]
+    )
+
+    if not docs:
+        return "Nenhum documento sobre hipertensão encontrado."
+
+    return format_docs(docs)

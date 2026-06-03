@@ -7,7 +7,7 @@ from langgraph.prebuilt import create_react_agent
 from app.services.llm import get_chat_model_openai
 from app.core.config import settings
 from app.tools.athena import query_athena_tool
-from app.tools.rag import search_medical_compliance_tool, search_sop_tool
+from app.tools.rag import search_medical_compliance_tool, search_sop_tool, search_clinic_has
 from app.tools.transcription import transcribe_audio_tool
 from app.tools.performance import analyze_clinical_performance_tool
 
@@ -26,7 +26,7 @@ async def athena_agent_tool(query: str, config: RunnableConfig) -> str:
     agent = create_react_agent(
         model=llm, 
         tools=[query_athena_tool],
-        prompt="Você é um especialista em SQL para o AWS Athena. Retorne as informações pedidas. Responda SEMPRE em Português do Brasil."
+        prompt="You are an SQL specialist for AWS Athena. Return the requested information in a natural and clear way. NEVER expose or include the generated SQL query in your final response. ALWAYS respond in Brazilian Portuguese."
     )
     child_config = {**config, "run_name": "Athena SQL Agent"}
     result = await agent.ainvoke({"messages": [HumanMessage(content=query)]}, config=child_config)
@@ -44,7 +44,7 @@ async def compliance_agent_tool(query: str, config: RunnableConfig) -> str:
     agent = create_react_agent(
         model=llm, 
         tools=[search_medical_compliance_tool, search_sop_tool],
-        prompt="Você é um especialista em normas médicas e auditoria. Utilize suas ferramentas para buscar informações e repassá-las. Responda SEMPRE em Português do Brasil."
+        prompt="You are an expert in medical norms and auditing. Use your tools to search for information and pass it on. ALWAYS respond in Brazilian Portuguese."
     )
     child_config = {**config, "run_name": "Compliance RAG Agent"}
     result = await agent.ainvoke({"messages": [HumanMessage(content=query)]}, config=child_config)
@@ -62,7 +62,7 @@ async def audio_agent_tool(query: str, config: RunnableConfig) -> str:
     agent = create_react_agent(
         model=llm, 
         tools=[transcribe_audio_tool],
-        prompt="Você transcreve e estrutura ditados médicos. Responda SEMPRE em Português do Brasil."
+        prompt="You transcribe and structure medical dictations. ALWAYS respond in Brazilian Portuguese."
     )
     child_config = {**config, "run_name": "Audio Transcription Agent"}
     result = await agent.ainvoke({"messages": [HumanMessage(content=query)]}, config=child_config)
@@ -80,8 +80,27 @@ async def performance_agent_tool(query: str, config: RunnableConfig) -> str:
     agent = create_react_agent(
         model=llm, 
         tools=[analyze_clinical_performance_tool],
-        prompt="Você analisa relatórios de desempenho e métricas de auditoria. Responda SEMPRE em Português do Brasil."
+        prompt="You analyze performance reports and auditing metrics. ALWAYS respond in Brazilian Portuguese."
     )
     child_config = {**config, "run_name": "Clinical Performance Agent"}
+    result = await agent.ainvoke({"messages": [HumanMessage(content=query)]}, config=child_config)
+    return result["messages"][-1].content
+
+# Agente de Análise da Linha de Cuidado em Hipertensão Arterial
+@tool("clinical_has_tool")
+async def clinical_has_tool(query: str, config: RunnableConfig) -> str:
+    """
+    Agente Especialista em classificação de risco de pacientes em atendimento de cardiologia focado principalmente na Hipertensão Arterial.
+    Use este agente para obter informações sobre a linha de cuidado em hipertensão arterial.
+    Retorne as informações pedidas.
+    """
+    logger.info("Executando Avaliação Clínica HAS - HAS Agent...")
+    llm = get_chat_model_openai(model=settings.MODEL_HAS)
+    agent = create_react_agent(
+        model=llm, 
+        tools=[athena_agent_tool, search_clinic_has],
+        prompt="You are an expert in Cardiology Appointments and risk classification of patients with Arterial Hypertension. Classify the risk of patients with HAS based on the documentation available via RAG. Return the requested information. ALWAYS respond in Brazilian Portuguese."
+    )
+    child_config = {**config, "run_name": "HAS Agent"}
     result = await agent.ainvoke({"messages": [HumanMessage(content=query)]}, config=child_config)
     return result["messages"][-1].content
