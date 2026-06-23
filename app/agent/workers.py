@@ -33,7 +33,7 @@ async def athena_agent_tool(query: str, config: RunnableConfig) -> str:
             "- NEVER use `SELECT *`. You must list the columns explicitly.\n"
             "- ALWAYS include `id_especialidade = 616` in the `WHERE` clause of every query to limit the scope.\n"
             "- Do NOT mix data types in `COALESCE`. `COALESCE(numeric_column, '')` causes TYPE_MISMATCH. Use `COALESCE(CAST(numeric_column AS VARCHAR), '')` or `COALESCE(numeric_column, 0)`.\n"
-            "- When filtering dates, use `CAST(data_atendimento AS DATE) >= DATE 'YYYY-MM-DD'` to avoid syntax errors.\n"
+            "- When filtering dates, use `data_atendimento = DATE 'YYYY-MM-DD'` (or `>=` / `<` with DATE) directly to utilize partitions. Do NOT use `CAST(data_atendimento AS DATE)` as it breaks partition pruning.\n"
             "- **PUSH-DOWN vs NLP**: If analyzing THOUSANDS of patients, DO NOT select raw text columns (`anamnese`, `conduta`). Instead, use `CASE WHEN regexp_like(lower(col), 'pattern') THEN 1 ELSE 0 END` to classify them on the Athena server. HOWEVER, if analyzing a SMALL BATCH (e.g., LIMIT 50) for deep NLP evaluation, you MUST select the raw text columns so they can be read.\n"
             "- ALWAYS use `LIMIT 5000` or less when querying rows. Prioritize aggregations (`COUNT()`, `GROUP BY`) if you just need statistics.\n"
             "## Counting & Data Integrity Rules\n"

@@ -200,32 +200,68 @@ async def run_agent(user_id: str, message: str, stream: bool = False):
             "metadata": tracing_metadata,
             "tags": [env, "agent"],
         }
-
         if stream:
             full_response = ""
             active_tools = 0
 
+            TOOL_ALIASES = {
+                "athena_agent_tool": "Pesquisa em Prontuários (SQL)",
+                "compliance_agent_tool": "Análise de Conformidade",
+                "audio_agent_tool": "Processamento de Transcrição",
+                "performance_agent_tool": "Auditoria de Desempenho",
+                "clinical_has_tool": "Classificação de Risco HAS",
+                "query_athena_tool": "Consulta ao Banco de Dados Athena",
+                "search_clinic_has": "Busca de Diretrizes (RAG)",
+            }
+
+            event_queue = asyncio.Queue()
+
+            async def consume_stream():
+                try:
+                    async for event in agent.astream_events(
+                        {"messages": input_messages},
+                        config=config,
+                        version="v2",
+                    ):
+                        await event_queue.put(event)
+                except Exception as e:
+                    await event_queue.put(e)
+                finally:
+                    await event_queue.put(None)
+
+            stream_task = asyncio.create_task(consume_stream())
+
             try:
-                async for event in agent.astream_events(
-                    {"messages": input_messages},
-                    config=config,
-                    version="v2",
-                ):
+                while True:
+                    try:
+                        event = await asyncio.wait_for(event_queue.get(), timeout=15.0)
+                    except asyncio.TimeoutError:
+                        # Envia espaço em branco Keep-Alive para manter conexão ativa no Render
+                        yield " "
+                        continue
+
+                    if event is None:
+                        break
+                    if isinstance(event, Exception):
+                        raise event
+
                     kind = event.get("event")
 
                     if kind == "on_tool_start":
                         active_tools += 1
                         tool_name = event.get("name", "ferramenta")
+                        alias = TOOL_ALIASES.get(tool_name, tool_name)
                         if active_tools == 1:
                             logger.info(f"Executando ferramenta: {tool_name}")
-                            yield f"\n[⚙️ Pensando: Acionando {tool_name}...]\n"
+                            yield f"\n[⚙️ Pensando: Acionando {alias}...]\n"
                         continue
                         
                     if kind == "on_tool_end":
                         active_tools -= 1
                         tool_name = event.get("name", "ferramenta")
+                        alias = TOOL_ALIASES.get(tool_name, tool_name)
                         if active_tools == 0:
-                            yield f"\n[✅ {tool_name} finalizado]\n"
+                            yield f"\n[✅ {alias} finalizado]\n"
                         continue
 
                     if kind == "on_chat_model_stream":
