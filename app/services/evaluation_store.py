@@ -23,7 +23,7 @@ _memory_store: list[dict] = []
 _table_created = False
 
 CREATE_TABLE_SQL = """
-CREATE TABLE IF NOT EXISTS evaluation_logs (
+CREATE TABLE IF NOT EXISTS evaluation_logs_amorzito (
     id              SERIAL PRIMARY KEY,
     user_id         TEXT NOT NULL,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS evaluation_logs (
 """
 
 INSERT_SQL = """
-INSERT INTO evaluation_logs
+INSERT INTO evaluation_logs_amorzito
     (user_id, created_at, question, response, raw_data, score, approved, errors, justification, breakdown, model)
 VALUES
     ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);
@@ -57,9 +57,9 @@ async def _ensure_table(conn: AsyncConnection) -> None:
             await cur.execute(CREATE_TABLE_SQL)
         await conn.commit()
         _table_created = True
-        logger.info("Tabela 'evaluation_logs' verificada/criada com sucesso.")
+        logger.info("Tabela 'evaluation_logs_amorzito' verificada/criada com sucesso.")
     except Exception as e:
-        logger.error(f"Erro ao criar tabela evaluation_logs: {e}")
+        logger.error(f"Erro ao criar tabela evaluation_logs_amorzito: {e}")
 
 
 async def save_evaluation(
@@ -147,13 +147,13 @@ async def get_evaluation_summary() -> dict:
                                     WHERE created_at >= NOW() - INTERVAL '7 days'
                                 )::numeric, 1
                             )                                   AS avg_score_7d
-                        FROM evaluation_logs;
+                        FROM evaluation_logs_amorzito;
                     """)
                     row = await cur.fetchone()
 
                     await cur.execute("""
                         SELECT elem
-                        FROM evaluation_logs,
+                        FROM evaluation_logs_amorzito,
                              jsonb_array_elements_text(errors) AS elem
                         WHERE approved = false
                         ORDER BY created_at DESC
@@ -188,7 +188,7 @@ async def get_evaluation_history(limit: int = 20) -> list[dict]:
                     await cur.execute("""
                         SELECT id, user_id, created_at, question, score, approved,
                                errors, justification, breakdown
-                        FROM evaluation_logs
+                        FROM evaluation_logs_amorzito
                         ORDER BY created_at DESC
                         LIMIT $1;
                     """, (limit,))

@@ -42,7 +42,8 @@ def _execute_athena_query(sql: str):
         cursor.execute(sql)
 
         columns = [desc[0] for desc in cursor.description]
-        rows = cursor.fetchmany(20)
+        # Safety limit to prevent memory/context overflow
+        rows = cursor.fetchmany(5000)
 
         results = [dict(zip(columns, row)) for row in rows]
         return results
@@ -60,7 +61,7 @@ async def query_athena_tool(sql: str) -> str:
     """
     Executa consultas SQL no AWS Athena para análise de prontuários médicos.
     A query deve ser compatível com Presto/Athena.
-    Retorne apenas dados relevantes. Limite sempre a 20 linhas.
+    Retorne apenas dados relevantes solicitados pelo usuário.
     """
     # Validate SQL before execution
     try:
@@ -84,7 +85,16 @@ async def query_athena_tool(sql: str) -> str:
             return "Nenhum resultado encontrado para esta consulta."
 
         logger.info(f"Ferramenta Athena: Retornadas {len(results)} linhas com sucesso.")
-        return str(results)
+        
+        # Converte para string e aplica um limite de segurança rígido (aprox 25.000 tokens)
+        # para nunca dar crash de "ContextLengthExceeded" na OpenAI/Anthropic
+        result_str = str(results)
+        max_chars = 100000
+        if len(result_str) > max_chars:
+            logger.warning(f"Resultado truncado de {len(result_str)} para {max_chars} caracteres.")
+            return result_str[:max_chars] + "... [ATENÇÃO: DADOS TRUNCADOS DEVIDO AO LIMITE DE TAMANHO. Refine sua consulta ou use COUNT/GROUP BY para evitar trazer tantos dados brutos.]"
+            
+        return result_str
 
     except Exception as e:
         logger.exception("Erro na ferramenta Athena")

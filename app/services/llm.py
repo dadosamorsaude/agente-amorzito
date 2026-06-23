@@ -26,4 +26,5 @@ def get_chat_model_claude(
         temperature=temperature if temperature is not None else settings.TEMPERATURE_CLAUDE,
         api_key=settings.ANTHROPIC_API_KEY,
         metadata=metadata or {},
+        max_retries=6,
     )

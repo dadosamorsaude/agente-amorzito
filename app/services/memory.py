@@ -40,14 +40,14 @@ def get_session_history(session_id: str) -> BaseChatMessageHistory:
             # Garante que a tabela existe apenas uma vez por ciclo de vida do processo
             if not _tables_created:
                 try:
-                    PostgresChatMessageHistory.create_tables(conn, "chat_history")
+                    PostgresChatMessageHistory.create_tables(conn, "chat_history_amorzito")
                     _tables_created = True
-                    logger.info("Tabela de histórico 'chat_history' verificada/criada com sucesso.")
+                    logger.info("Tabela de histórico 'chat_history_amorzito' verificada/criada com sucesso.")
                 except Exception as table_err:
                     logger.error(f"Erro ao verificar/criar tabelas no Postgres: {table_err}")
             
             history = PostgresChatMessageHistory(
-                "chat_history",
+                "chat_history_amorzito",
                 valid_session_id,
                 sync_connection=conn,
             )
@@ -79,7 +79,7 @@ def clear_session_history(session_id: str) -> None:
         try:
             conn = psycopg.connect(settings.DATABASE_URL, prepare_threshold=None)
             history = PostgresChatMessageHistory(
-                "chat_history",
+                "chat_history_amorzito",
                 valid_session_id,
                 sync_connection=conn,
             )

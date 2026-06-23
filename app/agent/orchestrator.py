@@ -56,8 +56,14 @@ When querying medical records, use the following information:
 - **No SQL in Response**: NEVER expose, mention, or include the SQL queries in your responses to the user. Always present the data in clear, natural language.
 - **Regional Names**: Always use `LOWER(regional)` when filtering or grouping by regional names to ensure case-insensitive matching.
 - Always filter by `data_atendimento` using the reference dates below.
-- Limit detailed results to 20 rows.
 - Use aggregations (COUNT, SUM, AVG) whenever possible for statistics.
+
+## Diretrizes de Fidelidade Numérica e Integridade de Sessão
+1. Fidelidade Numérica Absoluta: Transcreva os números gerados pelas consultas SQL exatamente como retornados. Nunca arredonde, estime ou modifique valores (por exemplo, se o SQL retornou 42, use '42', nunca 'cerca de 40').
+2. Especificação da Métrica de Contagem: Sempre diferencie claramente o número de "atendimentos/consultas" e o número de "pacientes únicos" (por exemplo, 'X atendimentos referentes a Y pacientes únicos').
+3. Menção de Período Temporal: Sempre informe claramente ao usuário qual o período de data_atendimento que foi considerado na contagem apresentada.
+4. Identificadores Reais: Exiba apenas identificadores reais de pacientes (id_paciente e nome_paciente) e atendimentos (id_atendimento) conforme retornados pela consulta SQL. É expressamente proibido alucinar CPFs ou IDs fictícios.
+5. Consistência de Filtros em Histórico: Ao processar perguntas consecutivas na mesma sessão, verifique o histórico para manter a consistência de data_atendimento, clínica, profissional ou outros filtros já aplicados, a menos que o usuário solicite explicitamente a alteração deles.
 
 ## Date Reference
 Today: {dates['hoje']}
@@ -155,7 +161,11 @@ async def run_agent(user_id: str, message: str, stream: bool = False):
         "environment": env,
     }
 
-    llm = get_chat_model_claude(model=settings.MODEL_ORCHESTRATOR, metadata=tracing_metadata)
+    from app.services.llm import get_chat_model_openai
+
+    primary_llm = get_chat_model_claude(model=settings.MODEL_ORCHESTRATOR, metadata=tracing_metadata)
+    fallback_llm = get_chat_model_openai(model=settings.MODEL_NAME, metadata=tracing_metadata)
+    llm = primary_llm.with_fallbacks([fallback_llm])
     tools = [
         athena_agent_tool,
         compliance_agent_tool,
@@ -193,6 +203,7 @@ async def run_agent(user_id: str, message: str, stream: bool = False):
 
         if stream:
             full_response = ""
+            active_tools = 0
 
             try:
                 async for event in agent.astream_events(
@@ -203,19 +214,30 @@ async def run_agent(user_id: str, message: str, stream: bool = False):
                     kind = event.get("event")
 
                     if kind == "on_tool_start":
+                        active_tools += 1
                         tool_name = event.get("name", "ferramenta")
-                        logger.info(f"Executando ferramenta: {tool_name}")
+                        if active_tools == 1:
+                            logger.info(f"Executando ferramenta: {tool_name}")
+                            yield f"\n[⚙️ Pensando: Acionando {tool_name}...]\n"
+                        continue
+                        
+                    if kind == "on_tool_end":
+                        active_tools -= 1
+                        tool_name = event.get("name", "ferramenta")
+                        if active_tools == 0:
+                            yield f"\n[✅ {tool_name} finalizado]\n"
                         continue
 
                     if kind == "on_chat_model_stream":
-                        chunk = event.get("data", {}).get("chunk")
-                        if not chunk:
-                            continue
+                        if active_tools == 0:
+                            chunk = event.get("data", {}).get("chunk")
+                            if not chunk:
+                                continue
 
-                        text = extract_text_from_content(getattr(chunk, "content", None))
-                        if text:
-                            full_response += text
-                            yield text
+                            text = extract_text_from_content(getattr(chunk, "content", None))
+                            if text:
+                                full_response += text
+                                yield text
 
                 final_response = validate_response(full_response).output if full_response else ""
 
