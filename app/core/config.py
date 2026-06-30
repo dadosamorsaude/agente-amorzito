@@ -31,17 +31,17 @@ class Settings(BaseSettings):
     ATHENA_DATABASE: str        # schema/database name (ex: pdgt_amorsaude_inteligencia)
     ATHENA_S3_STAGING_DIR: str  # s3://bucket/path/ (ex: s3://meu-bucket/athena-results/)
 
-    # Pinecone Settings
-    PINECONE_API_KEY: Optional[str] = None
-    PINECONE_INDEX_CFM: str
-    PINECONE_INDEX_POP: str
-    
     # Security
     AGENTE_API_KEY: str
     ALLOWED_ORIGINS: str
     
     # Memory — PostgreSQL (Optional, falls back to in-memory if not set)
     DATABASE_URL: Optional[str] = None  # postgresql://user:password@host:5432/dbname
+
+    # Central MCP Server Settings
+    CENTRAL_MCP_URL: str = "https://agentes-mcp-server.onrender.com/sse"
+    AGENT_ID: str = "agent-id-amorzito-uuid-placeholder"
+    MCP_API_KEY: str = "mcp_sk_central_sec_placeholder_key"
 
     @property
     def aws_region_clean(self) -> str:

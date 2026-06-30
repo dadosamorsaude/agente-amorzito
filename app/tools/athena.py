@@ -1,6 +1,7 @@
 import asyncio
+import json
 from contextvars import ContextVar
-from pyathena import connect
+from typing import Any
 from app.core.config import settings
 from langchain_core.tools import tool
 from langsmith import traceable
@@ -25,36 +26,6 @@ def validate_sql(sql: str) -> None:
         raise ValueError("SELECT * não é permitido. Por favor, liste as colunas explicitamente.")
 
 
-def _execute_athena_query(sql: str):
-    """Internal synchronous function to execute the query."""
-    conn = None
-    cursor = None
-    try:
-        conn = connect(
-            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-            region_name=settings.aws_region_clean,
-            s3_staging_dir=settings.ATHENA_S3_STAGING_DIR,
-            schema_name=settings.ATHENA_DATABASE,
-        )
-
-        cursor = conn.cursor()
-        cursor.execute(sql)
-
-        columns = [desc[0] for desc in cursor.description]
-        # Safety limit to prevent memory/context overflow
-        rows = cursor.fetchmany(5000)
-
-        results = [dict(zip(columns, row)) for row in rows]
-        return results
-
-    finally:
-        if cursor is not None:
-            cursor.close()
-        if conn is not None:
-            conn.close()
-
-
 @tool
 @traceable(name="query_athena_tool")
 async def query_athena_tool(sql: str) -> str:
@@ -63,39 +34,67 @@ async def query_athena_tool(sql: str) -> str:
     A query deve ser compatível com Presto/Athena.
     Retorne apenas dados relevantes solicitados pelo usuário.
     """
-    # Validate SQL before execution
     try:
         validate_sql(sql)
     except ValueError as e:
         logger.warning(f"SQL inválido rejeitado: {e}")
         return f"Consulta inválida: {str(e)}"
 
-    logger.info(f"Ferramenta Athena executando (async): {sql}")
+    logger.info(f"Ferramenta Athena executando via MCP (async): {sql}")
 
     try:
-        # Executa a query síncrona em uma thread separada para não bloquear o loop de eventos
-        results = await asyncio.to_thread(_execute_athena_query, sql)
+        from app.services.mcp_client import invoke_mcp_tool
+        response_obj = await invoke_mcp_tool("query_athena_tool", {"sql": sql, "agent_id": settings.AGENT_ID})
 
-        # Captura os dados brutos no contexto para uso pelo Agente Avaliador
-        captured = athena_results_context.get([])
-        athena_results_context.set(captured + [{"sql": sql, "results": results}])
+        # Processamento robusto do retorno do MCP
+        raw_text = ""
+        if isinstance(response_obj, list):
+            parts = []
+            for item in response_obj:
+                if hasattr(item, "text"):
+                    parts.append(item.text)
+                elif isinstance(item, dict) and "text" in item:
+                    parts.append(item["text"])
+                elif isinstance(item, str):
+                    parts.append(item)
+                else:
+                    parts.append(str(item))
+            raw_text = "".join(parts)
+        elif isinstance(response_obj, str):
+            raw_text = response_obj
+        else:
+            raw_text = str(response_obj)
 
-        if not results:
-            logger.info("Ferramenta Athena: Nenhum resultado encontrado.")
-            return "Nenhum resultado encontrado para esta consulta."
+        payload = {}
+        try:
+            payload = json.loads(raw_text)
+        except Exception:
+            payload = raw_text
 
-        logger.info(f"Ferramenta Athena: Retornadas {len(results)} linhas com sucesso.")
-        
-        # Converte para string e aplica um limite de segurança rígido (aprox 25.000 tokens)
-        # para nunca dar crash de "ContextLengthExceeded" na OpenAI/Anthropic
-        result_str = str(results)
-        max_chars = 100000
-        if len(result_str) > max_chars:
-            logger.warning(f"Resultado truncado de {len(result_str)} para {max_chars} caracteres.")
-            return result_str[:max_chars] + "... [ATENÇÃO: DADOS TRUNCADOS DEVIDO AO LIMITE DE TAMANHO. Refine sua consulta ou use COUNT/GROUP BY para evitar trazer tantos dados brutos.]"
-            
-        return result_str
+        results = []
+        try:
+            if isinstance(payload, dict):
+                results = payload.get("rows", [])
+                hit_limit = payload.get("row_limit_hit", False)
+                captured = athena_results_context.get([])
+                athena_results_context.set(
+                    captured + [{"sql": sql, "results": results, "row_limit_hit": hit_limit}]
+                )
+                logger.info(f"Ferramenta Athena: Retornadas {len(results)} linhas via MCP.")
+                return json.dumps(results, default=str, ensure_ascii=False)
+            elif isinstance(payload, list):
+                results = payload
+                captured = athena_results_context.get([])
+                athena_results_context.set(
+                    captured + [{"sql": sql, "results": results, "row_limit_hit": False}]
+                )
+                logger.info(f"Ferramenta Athena: Retornadas {len(results)} linhas via MCP.")
+                return raw_text
+        except Exception as parse_err:
+            logger.warning(f"Erro ao capturar dados do MCP no athena_results_context: {parse_err}")
+
+        return raw_text
 
     except Exception as e:
-        logger.exception("Erro na ferramenta Athena")
-        return f"Erro ao acessar o banco de dados Athena: {str(e)}. Verifique se as credenciais e o nome do banco estão corretos."
+        logger.exception("Erro na ferramenta Athena via MCP")
+        return f"Erro ao acessar o banco de dados Athena via MCP: {str(e)}."

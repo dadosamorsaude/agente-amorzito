@@ -1,75 +1,9 @@
 from contextvars import ContextVar
-import os
-from pinecone import Pinecone
-from langchain_pinecone import PineconeVectorStore
-from langchain_openai import OpenAIEmbeddings
 from langchain_core.tools import tool
 from langsmith import traceable
 from app.core.config import settings
 
 rag_results_context: ContextVar[list] = ContextVar("rag_results", default=[])
-
-NAMESPACE_CFM = os.getenv("PINECONE_NAMESPACE_CFM")
-NAMESPACE_REGRAS = os.getenv("PINECONE_NAMESPACE_REGRAS")
-NAMESPACE_RDC = os.getenv("PINECONE_NAMESPACE_RDC")
-NAMESPACE_HIPERTENSAO = os.getenv("PINECONE_NAMESPACE_HIPERTENSAO")
-INDEX_HIPERTENSAO = os.getenv("PINECONE_INDEX_HAS")
-
-
-def get_retriever(index_name: str, namespace: str = "", k: int = 5):
-    """
-    Inicializa e retorna um retriever Pinecone para um namespace específico.
-    """
-
-    if not settings.PINECONE_API_KEY:
-        return None
-
-    embeddings = OpenAIEmbeddings(
-        api_key=settings.OPENAI_API_KEY,
-        model="text-embedding-3-large",
-        dimensions=3072
-    )
-
-    pc = Pinecone(api_key=settings.PINECONE_API_KEY)
-    index = pc.Index(index_name)
-
-    vectorstore = PineconeVectorStore(
-        index=index,
-        embedding=embeddings,
-        namespace=namespace,
-        text_key="text"
-    )
-
-    return vectorstore.as_retriever(
-        search_kwargs={
-            "k": k
-        }
-    )
-
-
-def get_compliance_retriever(namespace: str, k: int = 5):
-    return get_retriever(
-        index_name=settings.PINECONE_INDEX_CFM,
-        namespace=namespace,
-        k=k
-    )
-
-
-def get_pop_retriever(namespace: str = "", k: int = 5):
-    return get_retriever(
-        index_name=settings.PINECONE_INDEX_POP,
-        namespace=namespace,
-        k=k
-    )
-
-
-def get_hipertensao_retriever(namespace: str = NAMESPACE_HIPERTENSAO, k: int = 5):
-    return get_retriever(
-        index_name=INDEX_HIPERTENSAO,
-        namespace=namespace,
-        k=k
-    )
-
 
 
 def format_docs(docs) -> str:
@@ -77,15 +11,12 @@ def format_docs(docs) -> str:
     Formata os documentos recuperados com metadados.
     Ajuda o agente a saber de onde veio cada trecho.
     """
-
     if not docs:
         return ""
 
     formatted = []
-
     for i, doc in enumerate(docs, start=1):
         metadata = doc.metadata or {}
-
         fonte = metadata.get("fonte", "Fonte não informada")
         artigo = metadata.get("artigo", "")
         tema = metadata.get("tema", "")
@@ -96,16 +27,12 @@ def format_docs(docs) -> str:
             f"[Trecho {i}]\n"
             f"Fonte: {fonte}\n"
         )
-
         if capitulo:
             header += f"Capítulo: {capitulo}\n"
-
         if secao:
             header += f"Seção: {secao}\n"
-
         if artigo:
             header += f"Artigo: {artigo}\n"
-
         if tema:
             header += f"Tema: {tema}\n"
 
@@ -118,7 +45,7 @@ def format_docs(docs) -> str:
 
 @tool
 @traceable(name="search_medical_compliance_tool")
-def search_medical_compliance_tool(query: str) -> str:
+async def search_medical_compliance_tool(query: str) -> str:
     """
     OBRIGATÓRIO: Use esta ferramenta para buscar diretrizes CFM, Resolução CFM 2.153/2016,
     regras de negócio do dashboard de qualidade, critérios de conformidade documental,
@@ -127,127 +54,193 @@ def search_medical_compliance_tool(query: str) -> str:
     segurança do paciente, serviços de saúde, odontologia, resíduos, infraestrutura
     e processamento/esterilização.
     """
-
-    retriever_cfm = get_compliance_retriever(
-        namespace=NAMESPACE_CFM,
-        k=4
-    )
-
-    retriever_regras = get_compliance_retriever(
-        namespace=NAMESPACE_REGRAS,
-        k=4
-    )
-
-    if not retriever_cfm or not retriever_regras:
-        return "Erro ao configurar buscador de conformidade."
-
-    docs_cfm = retriever_cfm.invoke(query)
-    docs_regras = retriever_regras.invoke(query)
-
-    all_docs = docs_cfm + docs_regras
-
-    captured = rag_results_context.get([])
-
-    rag_results_context.set(
-        captured + [
+    try:
+        from app.services.mcp_client import invoke_mcp_tool
+        
+        # CFM RAG search via MCP
+        response_cfm = await invoke_mcp_tool(
+            "search_rag_tool",
             {
-                "source": "CFM",
-                "namespace": NAMESPACE_CFM,
                 "query": query,
-                "chunks": [d.page_content for d in docs_cfm],
-                "metadata": [d.metadata for d in docs_cfm],
-            },
+                "agent_id": settings.AGENT_ID,
+                "namespace_key": "cfm",
+                "k": 4
+            }
+        )
+        
+        # Rules RAG search via MCP
+        response_regras = await invoke_mcp_tool(
+            "search_rag_tool",
             {
-                "source": "Regras de Negócio",
-                "namespace": NAMESPACE_REGRAS,
                 "query": query,
-                "chunks": [d.page_content for d in docs_regras],
-                "metadata": [d.metadata for d in docs_regras],
-            },
-        ]
-    )
+                "agent_id": settings.AGENT_ID,
+                "namespace_key": "regras",
+                "k": 4
+            }
+        )
 
-    if not all_docs:
-        return "Nenhuma diretriz ou regra de negócio encontrada."
+        def parse_response(response_obj) -> tuple[str, list, list]:
+            raw_text = ""
+            if isinstance(response_obj, list):
+                parts = []
+                for item in response_obj:
+                    if hasattr(item, "text"):
+                        parts.append(item.text)
+                    elif isinstance(item, dict) and "text" in item:
+                        parts.append(item["text"])
+                    elif isinstance(item, str):
+                        parts.append(item)
+                    else:
+                        parts.append(str(item))
+                raw_text = "".join(parts)
+            elif isinstance(response_obj, str):
+                raw_text = response_obj
+            else:
+                raw_text = str(response_obj)
+            return raw_text, [raw_text], []
 
-    return format_docs(all_docs)
+        cfm_text, cfm_chunks, cfm_meta = parse_response(response_cfm)
+        regras_text, regras_chunks, regras_meta = parse_response(response_regras)
+
+        captured = rag_results_context.get([])
+        rag_results_context.set(
+            captured + [
+                {
+                    "source": "CFM",
+                    "namespace": "cfm_2153_2016",
+                    "query": query,
+                    "chunks": cfm_chunks,
+                    "metadata": cfm_meta,
+                },
+                {
+                    "source": "Regras de Negócio",
+                    "namespace": "regras_negocio_prontuario",
+                    "query": query,
+                    "chunks": regras_chunks,
+                    "metadata": regras_meta,
+                },
+            ]
+        )
+
+        return f"=== DIRETRIZES CFM ===\n{cfm_text}\n\n=== REGRAS DE NEGÓCIO ===\n{regras_text}"
+
+    except Exception as e:
+        logger.error(f"Erro em search_medical_compliance_tool via MCP: {e}")
+        return f"Erro ao acessar as diretrizes de compliance via MCP: {str(e)}."
 
 
 @tool
 @traceable(name="search_sop_tool")
-def search_sop_tool(query: str) -> str:
+async def search_sop_tool(query: str) -> str:
     """
     OBRIGATÓRIO: Use esta ferramenta apenas para criação, revisão, estruturação
     ou elaboração de POPs, Procedimento Operacional Padrão, arquitetura de POPs,
     modelos de procedimento, instruções operacionais e documentos internos de processo.
     """
-
-    retriever_pop = get_pop_retriever(namespace="", k=4)
-    retriever_rdc = get_pop_retriever(namespace=NAMESPACE_RDC, k=4)
-
-    if not retriever_pop or not retriever_rdc:
-        return "Erro ao configurar buscador de POPs."
-
-    docs_pop = retriever_pop.invoke(query)
-    docs_rdc = retriever_rdc.invoke(query)
-
-    all_docs = docs_pop + docs_rdc
-
-    captured = rag_results_context.get([])
-
-    rag_results_context.set(
-        captured + [
+    try:
+        from app.services.mcp_client import invoke_mcp_tool
+        
+        # POP RAG search via MCP (namespace "rdc" covers POPs and RDCs based on config/agents.py)
+        response_rdc = await invoke_mcp_tool(
+            "search_rag_tool",
             {
-                "source": "POP Interno",
                 "query": query,
-                "chunks": [d.page_content for d in docs_pop],
-                "metadata": [d.metadata for d in docs_pop],
-            },
-            {
-                "source": "RDC (Base para POP)",
-                "query": query,
-                "chunks": [d.page_content for d in docs_rdc],
-                "metadata": [d.metadata for d in docs_rdc],
+                "agent_id": settings.AGENT_ID,
+                "namespace_key": "rdc",
+                "k": 4
             }
-        ]
-    )
+        )
 
-    if not all_docs:
-        return "Nenhum POP ou RDC de base encontrado."
+        raw_text = ""
+        if isinstance(response_rdc, list):
+            parts = []
+            for item in response_rdc:
+                if hasattr(item, "text"):
+                    parts.append(item.text)
+                elif isinstance(item, dict) and "text" in item:
+                    parts.append(item["text"])
+                elif isinstance(item, str):
+                    parts.append(item)
+                else:
+                    parts.append(str(item))
+            raw_text = "".join(parts)
+        elif isinstance(response_rdc, str):
+            raw_text = response_rdc
+        else:
+            raw_text = str(response_rdc)
 
-    return format_docs(all_docs)
+        captured = rag_results_context.get([])
+        rag_results_context.set(
+            captured + [
+                {
+                    "source": "RDC / POP (MCP)",
+                    "query": query,
+                    "chunks": [raw_text],
+                    "metadata": [],
+                }
+            ]
+        )
+
+        return raw_text
+
+    except Exception as e:
+        logger.error(f"Erro em search_sop_tool via MCP: {e}")
+        return f"Erro ao acessar POPs via MCP: {str(e)}."
 
 
 @tool
 @traceable(name="search_clinic_has")
-def search_clinic_has(query: str) -> str:
+async def search_clinic_has(query: str) -> str:
     """
     OBRIGATÓRIO: Use esta ferramenta para buscar informações sobre identificação, 
     clusterização, classificação de risco, e protocolo clínico de pacientes hipertensos (HAS).
     """
-
-    retriever = get_hipertensao_retriever(namespace=NAMESPACE_HIPERTENSAO, k=5)
-
-    if not retriever:
-        return "Erro ao configurar buscador de hipertensão."
-
-    docs = retriever.invoke(query)
-
-    captured = rag_results_context.get([])
-
-    rag_results_context.set(
-        captured + [
+    try:
+        from app.services.mcp_client import invoke_mcp_tool
+        
+        response_has = await invoke_mcp_tool(
+            "search_rag_tool",
             {
-                "source": "Protocolo Clínico Hipertensão",
-                "namespace": NAMESPACE_HIPERTENSAO,
                 "query": query,
-                "chunks": [d.page_content for d in docs],
-                "metadata": [d.metadata for d in docs],
+                "agent_id": settings.AGENT_ID,
+                "namespace_key": "has",
+                "k": 5
             }
-        ]
-    )
+        )
 
-    if not docs:
-        return "Nenhum documento sobre hipertensão encontrado."
+        raw_text = ""
+        if isinstance(response_has, list):
+            parts = []
+            for item in response_has:
+                if hasattr(item, "text"):
+                    parts.append(item.text)
+                elif isinstance(item, dict) and "text" in item:
+                    parts.append(item["text"])
+                elif isinstance(item, str):
+                    parts.append(item)
+                else:
+                    parts.append(str(item))
+            raw_text = "".join(parts)
+        elif isinstance(response_has, str):
+            raw_text = response_has
+        else:
+            raw_text = str(response_has)
 
-    return format_docs(docs)
+        captured = rag_results_context.get([])
+        rag_results_context.set(
+            captured + [
+                {
+                    "source": "Protocolo Clínico Hipertensão (MCP)",
+                    "namespace": "documento_hipertensao",
+                    "query": query,
+                    "chunks": [raw_text],
+                    "metadata": [],
+                }
+            ]
+        )
+
+        return raw_text
+
+    except Exception as e:
+        logger.error(f"Erro em search_clinic_has via MCP: {e}")
+        return f"Erro ao consultar protocolo HAS via MCP: {str(e)}."
