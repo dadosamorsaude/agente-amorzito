@@ -33,6 +33,8 @@ Dockerfile
 .vscode/
 .idea/
 
+# Tests
+tests/
+
 # Scripts
-chunking-*.py
-criar_index_pinecone.py
+scripts/

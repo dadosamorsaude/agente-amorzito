@@ -10,8 +10,7 @@ from app.agent.orchestrator import run_agent, _run_evaluation_background
 from app.api.security import get_api_key
 from app.core.logger import logger
 from app.services.memory import get_session_history
-from app.tools.athena import athena_results_context
-from app.tools.rag import rag_results_context
+from app.services.mcp_client import athena_results_context, rag_results_context
 from fastapi import BackgroundTasks
 
 router = APIRouter()

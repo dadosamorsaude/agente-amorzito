@@ -39,8 +39,3 @@ class InMemoryRateLimiter:
 
 
 rate_limiter = InMemoryRateLimiter()
-
-AUDIO_RATE_LIMIT = 10
-AUDIO_WINDOW = 60
-CHAT_VOICE_RATE_LIMIT = 10
-CHAT_VOICE_WINDOW = 60

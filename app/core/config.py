@@ -20,7 +20,6 @@ class Settings(BaseSettings):
     MODEL_ORCHESTRATOR: str = "claude-sonnet-4-6"
     MODEL_ATHENA: str = "gpt-5.4-mini"
     MODEL_COMPLIANCE: str = "gpt-5.4-mini"
-    MODEL_AUDIO: str = "gpt-5.4-mini"
     MODEL_PERFORMANCE: str = "gpt-5.5"
     MODEL_HAS: str = "gpt-5.4-mini"
 

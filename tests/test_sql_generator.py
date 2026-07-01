@@ -48,8 +48,12 @@ def test_generate_sql_quality_table():
         assert sql == mock_response.content
 
 def test_orchestrator_system_prompt():
-    """Verify that the orchestrator's system prompt includes the newly configured tables and schemas."""
+    """Verify that the orchestrator's system prompt includes references to specialists and date formats."""
     dates = {"hoje": "2026-05-21", "ontem": "2026-05-20"}
     prompt = _build_system_prompt(dates)
 
-    assert "fl_qualidade_prontuarios_ia" in prompt
+    assert "compliance_agent_tool" in prompt
+    assert "athena_agent_tool" in prompt
+    assert "performance_agent_tool" in prompt
+    assert "2026-05-21" in prompt
+    assert "2026-05-20" in prompt

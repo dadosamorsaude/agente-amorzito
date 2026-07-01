@@ -1,13 +1,8 @@
 # Environments
 .env
 .env.*
-criar_index_pinecone.py
-chunking-normas.py
-chunking-regras.py
-chunking-rdc.py
-chunking-catarata.py
 *.html
-tests
+*.log
 
 # Python-generated files
 __pycache__/
@@ -28,9 +23,6 @@ wheels/
 
 # Cache de testes
 .pytest_cache/
-
-# Áudios temporários enviados por usuários
-temp_audios/
 
 # Temporary and Data folders
 scratch/

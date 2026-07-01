@@ -6,9 +6,7 @@ from langgraph.prebuilt import create_react_agent
 
 from app.services.llm import get_chat_model_openai
 from app.core.config import settings
-from app.tools.athena import query_athena_tool
-from app.tools.rag import search_medical_compliance_tool, search_sop_tool, search_clinic_has
-from app.tools.transcription import transcribe_audio_tool
+from app.services.mcp_client import query_athena_tool, search_medical_compliance_tool, search_sop_tool, search_clinic_has, get_cached_sql_expert_prompt
 from app.tools.performance import analyze_clinical_performance_tool
 
 logger = logging.getLogger(__name__)
@@ -22,11 +20,13 @@ async def athena_agent_tool(query: str, config: RunnableConfig) -> str:
     Passe as instruções claras sobre o que buscar e de quais datas.
     """
     logger.info("Executando Athena Agent...")
-    llm = get_chat_model_openai(model=settings.MODEL_ATHENA)
-    agent = create_react_agent(
-        model=llm, 
-        tools=[query_athena_tool],
-        prompt=(
+    
+    # Busca prompt técnico do especialista SQL via MCP com cache
+    try:
+        sql_prompt = await get_cached_sql_expert_prompt("amorzito")
+    except Exception as e:
+        logger.warning(f"Erro ao carregar prompt SQL do MCP: {e}. Usando prompt de fallback local.")
+        sql_prompt = (
             "You are an SQL specialist for AWS Athena. Return the requested information in a natural and clear way. "
             "NEVER expose or include the generated SQL query in your final response. ALWAYS respond in Brazilian Portuguese.\n"
             "## SQL Rules\n"
@@ -42,6 +42,12 @@ async def athena_agent_tool(query: str, config: RunnableConfig) -> str:
             "- Never use `COUNT(*)` generically, to avoid duplicate row inflations.\n"
             "- When returning individual records/lists, ALWAYS explicitly query and return `id_paciente`, `nome_paciente`, and `id_atendimento`. NEVER hallucinate, omit, or invent patient/appointment IDs.\n"
         )
+        
+    llm = get_chat_model_openai(model=settings.MODEL_ATHENA)
+    agent = create_react_agent(
+        model=llm, 
+        tools=[query_athena_tool],
+        prompt=sql_prompt
     )
     child_config = {**config, "run_name": "Athena SQL Agent"}
     result = await agent.ainvoke({"messages": [HumanMessage(content=query)]}, config=child_config)
@@ -65,23 +71,6 @@ async def compliance_agent_tool(query: str, config: RunnableConfig) -> str:
     result = await agent.ainvoke({"messages": [HumanMessage(content=query)]}, config=child_config)
     return result["messages"][-1].content
 
-# Agente de Áudio / Transcrição
-@tool("audio_agent_tool")
-async def audio_agent_tool(query: str, config: RunnableConfig) -> str:
-    """
-    Agente Especialista em Processamento de Áudio Clínico.
-    Use este agente para transcrever ditados médicos.
-    """
-    logger.info("Executando Audio Agent...")
-    llm = get_chat_model_openai(model=settings.MODEL_AUDIO)
-    agent = create_react_agent(
-        model=llm, 
-        tools=[transcribe_audio_tool],
-        prompt="You transcribe and structure medical dictations. ALWAYS respond in Brazilian Portuguese."
-    )
-    child_config = {**config, "run_name": "Audio Transcription Agent"}
-    result = await agent.ainvoke({"messages": [HumanMessage(content=query)]}, config=child_config)
-    return result["messages"][-1].content
 
 # Agente de Performance e Auditoria
 @tool("performance_agent_tool")

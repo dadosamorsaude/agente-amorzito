@@ -6,19 +6,14 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.prebuilt import create_react_agent
 from app.core.config import settings
 from app.services.llm import get_chat_model_claude
-from app.tools.athena import athena_results_context
-from app.tools.rag import rag_results_context
+from app.services.mcp_client import athena_results_context, rag_results_context
 from app.agent.workers import (
     athena_agent_tool,
     compliance_agent_tool,
-    audio_agent_tool,
     performance_agent_tool
 )
 from app.services.memory import get_session_history
-from app.services.validator import validate_response
 from app.utils.dates import get_dates
-from app.agent.evaluator import evaluate_response
-from app.services.evaluation_store import save_evaluation
 
 logger = logging.getLogger(__name__)
 
@@ -37,26 +32,6 @@ To ensure your responses are based on official evidence and protocols:
 1. **CFM & Regulations / SOPs**: For any questions regarding guidelines, medical ethics, POPs, quality criteria, or **calculation of quality indicators (like IQRC)**, you MUST use the `compliance_agent_tool`.
 2. **Internal Data**: Use `athena_agent_tool` for specific patient records, prescriptions, or direct database queries.
 3. **Clinical Performance & Audit**: If asked about general quality, performance reports, or compliance trends, use `performance_agent_tool`.
-4. **Audio Analysis (Auxiliar Médico)**: Use `audio_agent_tool` for clinical dictations. Always structure these as: ANAMNESE, CONDUTA, HIPÓTESE, CID-10 before auditing.
-
-## Database Schema (AWS Athena)
-When querying medical records, use the following information:
-- **Table**: `pdgt_amorsaude_tecnologia.fl_qualidade_prontuarios_ia`
-- **Allowed Columns**: id_paciente, data_nascimento, id_agendamento, id_atendimento, data_atendimento, status_agendamento, id_especialidade, especialidade, anamnese, conduta, hipotese_diagnostica, observacao, orientacao, solicitacao, especialidade_destino, cid_codigo, cid_descricao_detalhada, id_clinica, clinica, regional, uf, municipio, id_profissional, nome_profissional, prontuario_assinado.
-
-## SQL & Analysis Rules
-- **Fields to Analyze for Quality**: Always focus on `anamnese`, `conduta`, `hipotese_diagnostica`, `cid_codigo` and `prontuario_assinado`.
-- **Prescription Details**: To find prescription information, search in ALL textual fields: `anamnese`, `conduta`, `hipotese_diagnostica`, `orientacao`, `solicitacao`, and `observacao`. However, only the original 5 fields are part of the IQRC calculation.
-- **Quality Logic (IQRC)**: A record is only considered compliant (IQRC success) if `anamnese`, `conduta`, `hipotese_diagnostica`, `cid_codigo`, AND `prontuario_assinado` are all valid/signed.
-- **Text Validation**: Fields filled with "xxx", "--", "ok", "NA", ".....", or generic text are considered **NOT filled**.
-- **Signed Status**: A record is signed only if `prontuario_assinado` = 1.
-- **Valid Appointments**: Only consider records where `status_agendamento` is one of: 4, 5, 6, 7, 10, 11, 12, 13, 14, 15, 24, 40, 60, 83.
-- **Mandatory Exclusions**: ALWAYS exclude `id_especialidade` IN (932, 1154, 993, 776, 777, 892, 1013, 711, 778, 658, 712, 732, 680, 1274, 779).
-- **SQL Best Practices**: NEVER use `SELECT *`. List columns explicitly.
-- **No SQL in Response**: NEVER expose, mention, or include the SQL queries in your responses to the user. Always present the data in clear, natural language.
-- **Regional Names**: Always use `LOWER(regional)` when filtering or grouping by regional names to ensure case-insensitive matching.
-- Always filter by `data_atendimento` using the reference dates below.
-- Use aggregations (COUNT, SUM, AVG) whenever possible for statistics.
 
 ## Diretrizes de Fidelidade Numérica e Integridade de Sessão
 1. Fidelidade Numérica Absoluta: Transcreva os números gerados pelas consultas SQL exatamente como retornados. Nunca arredonde, estime ou modifique valores (por exemplo, se o SQL retornou 42, use '42', nunca 'cerca de 40').
@@ -169,11 +144,22 @@ async def run_agent(user_id: str, message: str, stream: bool = False):
     tools = [
         athena_agent_tool,
         compliance_agent_tool,
-        audio_agent_tool,
         performance_agent_tool,
     ]
     dates = get_dates()
-    system_prompt = _build_system_prompt(dates)
+    
+    # Carrega o prompt do sistema com cache TTL via MCP
+    from app.services.mcp_client import get_cached_system_prompt
+    try:
+        system_prompt = await get_cached_system_prompt(
+            agent_id="amorzito",
+            data_hoje=dates['hoje'],
+            data_ontem=dates['ontem']
+        )
+    except Exception as e:
+        logger.warning(f"Erro ao carregar prompt com cache do MCP: {e}. Utilizando prompt de fallback local.")
+        system_prompt = _build_system_prompt(dates)
+
     history = get_session_history(user_id)
 
     try:
@@ -200,136 +186,30 @@ async def run_agent(user_id: str, message: str, stream: bool = False):
             "metadata": tracing_metadata,
             "tags": [env, "agent"],
         }
-        if stream:
-            full_response = ""
-            active_tools = 0
+        
+        TOOL_ALIASES = {
+            "athena_agent_tool": "Pesquisa em Prontuários (SQL)",
+            "compliance_agent_tool": "Análise de Conformidade",
+            "performance_agent_tool": "Auditoria de Desempenho",
+            "clinical_has_tool": "Classificação de Risco HAS",
+            "query_athena_tool": "Consulta ao Banco de Dados Athena",
+            "search_clinic_has": "Busca de Diretrizes (RAG)",
+        }
 
-            TOOL_ALIASES = {
-                "athena_agent_tool": "Pesquisa em Prontuários (SQL)",
-                "compliance_agent_tool": "Análise de Conformidade",
-                "audio_agent_tool": "Processamento de Transcrição",
-                "performance_agent_tool": "Auditoria de Desempenho",
-                "clinical_has_tool": "Classificação de Risco HAS",
-                "query_athena_tool": "Consulta ao Banco de Dados Athena",
-                "search_clinic_has": "Busca de Diretrizes (RAG)",
-            }
-
-            event_queue = asyncio.Queue()
-
-            async def consume_stream():
-                try:
-                    async for event in agent.astream_events(
-                        {"messages": input_messages},
-                        config=config,
-                        version="v2",
-                    ):
-                        await event_queue.put(event)
-                except Exception as e:
-                    await event_queue.put(e)
-                finally:
-                    await event_queue.put(None)
-
-            stream_task = asyncio.create_task(consume_stream())
-
-            try:
-                while True:
-                    try:
-                        event = await asyncio.wait_for(event_queue.get(), timeout=15.0)
-                    except asyncio.TimeoutError:
-                        # Envia espaço em branco Keep-Alive para manter conexão ativa no Render
-                        yield " "
-                        continue
-
-                    if event is None:
-                        break
-                    if isinstance(event, Exception):
-                        raise event
-
-                    kind = event.get("event")
-
-                    if kind == "on_tool_start":
-                        active_tools += 1
-                        tool_name = event.get("name", "ferramenta")
-                        alias = TOOL_ALIASES.get(tool_name, tool_name)
-                        if active_tools == 1:
-                            logger.info(f"Executando ferramenta: {tool_name}")
-                            yield f"\n[⚙️ Pensando: Acionando {alias}...]\n"
-                        continue
-                        
-                    if kind == "on_tool_end":
-                        active_tools -= 1
-                        tool_name = event.get("name", "ferramenta")
-                        alias = TOOL_ALIASES.get(tool_name, tool_name)
-                        if active_tools == 0:
-                            yield f"\n[✅ {alias} finalizado]\n"
-                        continue
-
-                    if kind == "on_chat_model_stream":
-                        if active_tools == 0:
-                            chunk = event.get("data", {}).get("chunk")
-                            if not chunk:
-                                continue
-
-                            text = extract_text_from_content(getattr(chunk, "content", None))
-                            if text:
-                                full_response += text
-                                yield text
-
-                final_response = validate_response(full_response).output if full_response else ""
-
-                history.add_user_message(message)
-                history.add_ai_message(final_response)
-
-                # Dispara avaliação em background (sem bloquear o stream)
-                raw_data = athena_results_context.get([])
-                rag_data = rag_results_context.get([])
-                if (raw_data or rag_data) and final_response:
-                    # Formata o histórico para o avaliador
-                    history_str = "\n".join([f"{type(m).__name__}: {m.content}" for m in recent_messages])
-                    asyncio.create_task(
-                        _run_evaluation_background(user_id, message, final_response, raw_data, rag_data, history_str)
-                    )
-
-            except asyncio.CancelledError:
-                logger.warning("Streaming cancelado pelo cliente.")
-                return
-
-        else:
-            result = await agent.ainvoke({"messages": input_messages}, config=config)
-
-            messages = result.get("messages", [])
-            if not messages:
-                final_response = "Não foi possível gerar uma resposta."
-            else:
-                response_text = extract_text_from_content(messages[-1].content)
-                validation = validate_response(response_text)
-                final_response = validation.output
-
-            # Retry automático em caso de erro técnico
-            if final_response.startswith("Erro técnico:"):
-                logger.warning("Resposta com erro técnico — refazendo consulta...")
-                result = await agent.ainvoke({"messages": input_messages}, config=config)
-                messages = result.get("messages", [])
-                if messages:
-                    response_text = extract_text_from_content(messages[-1].content)
-                    validation = validate_response(response_text)
-                    new_response = validation.output
-                    if not new_response.startswith("Erro técnico:"):
-                        final_response = new_response
-                        logger.info("Retry bem-sucedido")
-
-            history.add_user_message(message)
-            history.add_ai_message(final_response)
-
-            raw_data = athena_results_context.get([])
-            rag_data = rag_results_context.get([])
-            if (raw_data or rag_data) and final_response:
-                history_str = "\n".join([f"{type(m).__name__}: {m.content}" for m in recent_messages])
-                asyncio.create_task(
-                    _run_evaluation_background(user_id, message, final_response, raw_data, rag_data, history_str)
-                )
-
-            yield final_response
+        # Delega todo o processamento de eventos de streaming para o helper utilitário
+        async for chunk in stream_agent_response(
+            agent=agent,
+            input_messages=input_messages,
+            config=config,
+            history=history,
+            message=message,
+            user_id=user_id,
+            stream=stream,
+            athena_results_context=athena_results_context,
+            rag_results_context=rag_results_context,
+            tool_aliases=TOOL_ALIASES
+        ):
+            yield chunk
 
     except Exception as e:
         logger.exception("Erro no AgentExecutor")
